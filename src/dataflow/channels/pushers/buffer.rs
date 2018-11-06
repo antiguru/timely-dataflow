@@ -117,6 +117,12 @@ impl<'a, T, D, P: Push<Bundle<T, D>>+'a> Session<'a, T, D, P>  where T: Eq+Clone
             self.buffer.give_vec(message);
         }
     }
+
+    /// Indicate that no more output may be produced and processing of output can start.
+    #[inline(always)]
+    pub fn may_cease(&mut self) {
+        self.buffer.cease()
+    }
 }
 
 /// A session which will flush itself when dropped.
