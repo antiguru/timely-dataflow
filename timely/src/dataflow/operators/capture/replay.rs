@@ -47,6 +47,8 @@ use crate::progress::Timestamp;
 
 use super::Event;
 use super::event::EventIterator;
+use std::time::{Duration, Instant};
+use crate::scheduling::Activator;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, D: Data> : Sized {
@@ -59,13 +61,22 @@ pub trait Replay<T: Timestamp, D: Data> : Sized {
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
     /// re-activate itself.us
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>;
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D> {
+        self.replay_activated(scope, period).1
+    }
+
+    /// Replays `self` into the provided scope, as a `Stream<S, D>'.
+    ///
+    /// The `period` argument allows the specification of a re-activation period, where the operator
+    /// will re-activate itself every so often. The `None` argument instructs the operator not to
+    /// re-activate itself.us
+    fn replay_activated<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> (Activator, Stream<S, D>);
 }
 
 impl<T: Timestamp, D: Data, I> Replay<T, D> for I
 where I : IntoIterator,
       <I as IntoIterator>::Item: EventIterator<T, D>+'static {
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> Stream<S, D>{
+    fn replay_activated<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<Duration>) -> (Activator, Stream<S, D>) {
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 
@@ -77,6 +88,7 @@ where I : IntoIterator,
         let mut output = PushBuffer::new(PushCounter::new(targets));
         let mut event_streams = self.into_iter().collect::<Vec<_>>();
         let mut started = false;
+        let mut last_scheduled_activation = Instant::now();
 
         builder.build(
             move |progress| {
@@ -104,7 +116,10 @@ where I : IntoIterator,
 
                 // A `None` period indicates that we do not re-activate here.
                 if let Some(delay) = period {
-                    activator.activate_after(delay);
+                    if last_scheduled_activation.elapsed() >= delay {
+                        last_scheduled_activation = Instant::now();
+                        activator.activate_after(delay);
+                    }
                 }
 
                 output.cease();
@@ -114,6 +129,6 @@ where I : IntoIterator,
             }
         );
 
-        stream
+        (scope.activator_for(&address), stream)
     }
 }
