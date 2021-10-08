@@ -5,8 +5,7 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::Data;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, CoreStream};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -18,7 +17,7 @@ use crate::progress::Timestamp;
 use super::{Event, EventPusher};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, D: Data> {
+pub trait Capture<T: Timestamp, D: Container+'static> {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -114,7 +113,7 @@ pub trait Capture<T: Timestamp, D: Data> {
     }
 }
 
-impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
+impl<S: Scope, D: Container+'static> Capture<S::Timestamp, D> for CoreStream<S, D> {
     fn capture_into<P: EventPusher<S::Timestamp, D>+'static>(&self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
@@ -137,14 +136,15 @@ impl<S: Scope, D: Data> Capture<S::Timestamp, D> for Stream<S, D> {
 
                 use crate::communication::message::RefOrMut;
 
+                let mut inner_allocation: Option<D::Allocation> = None;
                 // turn each received message into an event.
                 while let Some((mut message, allocation)) = input.next() {
                     let (time, data) = match message.as_ref_or_mut() {
                         RefOrMut::Ref(reference) => (&reference.time, RefOrMut::Ref(&reference.data)),
                         RefOrMut::Mut(reference) => (&reference.time, RefOrMut::Mut(&mut reference.data)),
                     };
-                    let vector = data.replace(Vec::new());
-                    event_pusher.push(Event::Messages(time.clone(), vector));
+                    let data = data.assemble(&mut inner_allocation);
+                    event_pusher.push(Event::Messages(time.clone(), data));
                     *allocation = Some(message.hollow());
                 }
                 input.consumed().borrow_mut().drain_into(&mut progress.consumeds[0]);

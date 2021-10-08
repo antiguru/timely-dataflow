@@ -1,9 +1,10 @@
 //! Traits and types for extracting captured timely dataflow streams.
 
 use super::Event;
+use crate::communication::Container;
 
 /// Supports extracting a sequence of timestamp and data.
-pub trait Extract<T: Ord, D: Ord> {
+pub trait Extract<T: Ord, C: Container> {
     /// Converts `self` into a sequence of timestamped data.
     ///
     /// Currently this is only implemented for `Receiver<Event<T, D>>`, and is used only
@@ -44,11 +45,11 @@ pub trait Extract<T: Ord, D: Ord> {
     ///
     /// assert_eq!(recv.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn extract(self) -> Vec<(T, Vec<D>)>;
+    fn extract(self) -> Vec<(T, C)>;
 }
 
-impl<T: Ord, D: Ord> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, D>> {
-    fn extract(self) -> Vec<(T, Vec<D>)> {
+impl<T: Ord, C: Container> Extract<T, C> for ::std::sync::mpsc::Receiver<Event<T, C>> {
+    fn extract(self) -> Vec<(T, C)> {
         let mut result = Vec::new();
         for event in self {
             if let Event::Messages(time, data) = event {
@@ -57,20 +58,20 @@ impl<T: Ord, D: Ord> Extract<T,D> for ::std::sync::mpsc::Receiver<Event<T, D>> {
         }
         result.sort_by(|x,y| x.0.cmp(&y.0));
 
-        let mut current = 0;
-        for i in 1 .. result.len() {
-            if result[current].0 == result[i].0 {
-                let dataz = ::std::mem::replace(&mut result[i].1, Vec::new());
-                result[current].1.extend(dataz);
-            }
-            else {
-                current = i;
-            }
-        }
+        // let mut current = 0;
+        // for i in 1 .. result.len() {
+        //     if result[current].0 == result[i].0 {
+        //         let dataz = ::std::mem::replace(&mut result[i].1, Vec::new());
+        //         result[current].1.extend(dataz);
+        //     }
+        //     else {
+        //         current = i;
+        //     }
+        // }
 
-        for &mut (_, ref mut data) in &mut result {
-            data.sort();
-        }
+        // for &mut (_, ref mut data) in &mut result {
+        //     data.sort();
+        // }
         result.retain(|x| !x.1.is_empty());
         result
     }

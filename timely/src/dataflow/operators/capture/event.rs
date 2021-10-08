@@ -4,13 +4,15 @@
 //! stream. There are two types of events, (i) the receipt of data and (ii) reports of progress
 //! of timestamps.
 
+use crate::communication::Container;
+
 /// Data and progress events of the captured stream.
 #[derive(Debug, Clone, Abomonation, Hash, Ord, PartialOrd, Eq, PartialEq)]
-pub enum Event<T, D> {
+pub enum Event<T, C> {
     /// Progress received via `push_external_progress`.
     Progress(Vec<(T, i64)>),
     /// Messages received via the data stream.
-    Messages(T, Vec<D>),
+    Messages(T, C),
 }
 
 /// Iterates over contained `Event<T, D>`.
@@ -19,9 +21,9 @@ pub enum Event<T, D> {
 /// and which can be used to replay a stream into a new timely dataflow computation.
 ///
 /// This method is not simply an iterator because of the lifetime in the result.
-pub trait EventIterator<T, D> {
-    /// Iterates over references to `Event<T, D>` elements.
-    fn next(&mut self) -> Option<&Event<T, D>>;
+pub trait EventIterator<T, C> {
+    /// Iterates over references to `Event<T, C>` elements.
+    fn next(&mut self) -> Option<&Event<T, C>>;
 }
 
 
@@ -33,8 +35,8 @@ pub trait EventPusher<T, D> {
 
 
 // implementation for the linked list behind a `Handle`.
-impl<T, D> EventPusher<T, D> for ::std::sync::mpsc::Sender<Event<T, D>> {
-    fn push(&mut self, event: Event<T, D>) {
+impl<T, C: Container> EventPusher<T, C> for ::std::sync::mpsc::Sender<Event<T, C>> {
+    fn push(&mut self, event: Event<T, C>) {
         // NOTE: An Err(x) result just means "data not accepted" most likely
         //       because the receiver is gone. No need to panic.
         let _ = self.send(event);
@@ -48,9 +50,10 @@ pub mod link {
     use std::cell::RefCell;
 
     use super::{Event, EventPusher, EventIterator};
+    use crate::communication::Container;
 
     /// A linked list of Event<T, D>.
-    pub struct EventLink<T, D> {
+    pub struct EventLink<T, D: Container> {
         /// An event, if one exists.
         ///
         /// An event might not exist, if either we want to insert a `None` and have the output iterator pause,
@@ -60,7 +63,7 @@ pub mod link {
         pub next: RefCell<Option<Rc<EventLink<T, D>>>>,
     }
 
-    impl<T, D> EventLink<T, D> {
+    impl<T, D: Container> EventLink<T, D> {
         /// Allocates a new `EventLink`.
         pub fn new() -> EventLink<T, D> {
             EventLink { event: None, next: RefCell::new(None) }
@@ -68,7 +71,7 @@ pub mod link {
     }
 
     // implementation for the linked list behind a `Handle`.
-    impl<T, D> EventPusher<T, D> for Rc<EventLink<T, D>> {
+    impl<T, D: Container> EventPusher<T, D> for Rc<EventLink<T, D>> {
         fn push(&mut self, event: Event<T, D>) {
             *self.next.borrow_mut() = Some(Rc::new(EventLink { event: Some(event), next: RefCell::new(None) }));
             let next = self.next.borrow().as_ref().unwrap().clone();
@@ -76,7 +79,7 @@ pub mod link {
         }
     }
 
-    impl<T, D> EventIterator<T, D> for Rc<EventLink<T, D>> {
+    impl<T, D: Container> EventIterator<T, D> for Rc<EventLink<T, D>> {
         fn next(&mut self) -> Option<&Event<T, D>> {
             let is_some = self.next.borrow().is_some();
             if is_some {
@@ -91,7 +94,7 @@ pub mod link {
     }
 
     // Drop implementation to prevent stack overflow through naive drop impl.
-    impl<T, D> Drop for EventLink<T, D> {
+    impl<T, D: Container> Drop for EventLink<T, D> {
         fn drop(&mut self) {
             while let Some(link) = self.next.replace(None) {
                 if let Ok(head) = Rc::try_unwrap(link) {
@@ -101,7 +104,7 @@ pub mod link {
         }
     }
 
-    impl<T, D> Default for EventLink<T, D> {
+    impl<T, D: Container> Default for EventLink<T, D> {
         fn default() -> Self {
             Self::new()
         }

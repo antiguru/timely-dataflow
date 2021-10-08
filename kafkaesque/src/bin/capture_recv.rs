@@ -31,7 +31,7 @@ fn main() {
             .filter(|i| i % worker.peers() == worker.index())
             .map(|i| {
                 let topic = format!("{}-{:?}", topic, i);
-                EventConsumer::<_,u64>::new(consumer_config.clone(), topic)
+                EventConsumer::<_,Vec<u64>>::new(consumer_config.clone(), topic)
             })
             .collect::<Vec<_>>();
 

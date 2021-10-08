@@ -5,6 +5,9 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
+use std::convert::TryFrom;
+
+use abomonation_derive::Abomonation;
 
 pub struct Registry<Id> {
     /// A worker-specific identifier.
@@ -13,6 +16,54 @@ pub struct Registry<Id> {
     map: HashMap<String, (Box<dyn Any>, Box<dyn Flush>)>,
     /// An instant common to all logging statements.
     time: Instant,
+}
+
+#[derive(Abomonation)]
+pub struct LogContainer<T, Id> {
+    pub time: Duration,
+    pub worker: Id,
+    pub entries: Vec<(u32, T)>,
+}
+
+impl<T, Id: Clone> LogContainer<T, Id> {
+    /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
+    /// this to size in elements.
+    const BUFFER_SIZE_BYTES: usize = 1 << 13;
+
+    /// The maximum buffer capacity in elements. Returns a number between [Self::BUFFER_SIZE_BYTES]
+    /// and 1, inclusively.
+    // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
+    fn buffer_capacity() -> usize {
+        let size =  ::std::mem::size_of::<(u32, T)>();
+        if size == 0 {
+            Self::BUFFER_SIZE_BYTES
+        } else if size <= Self::BUFFER_SIZE_BYTES {
+            Self::BUFFER_SIZE_BYTES / size
+        } else {
+            1
+        }
+    }
+
+    fn push(&mut self, time: Duration, data: T) {
+        let offset = u32::try_from(time.saturating_sub(self.time).as_nanos()).unwrap();
+        self.entries.push((offset, data));
+    }
+
+    pub fn take(&mut self) -> Self {
+        let entries = ::std::mem::take(&mut self.entries);
+        self.entries = Vec::with_capacity(Self::buffer_capacity());
+        Self {
+            time: self.time.clone(),
+            worker: self.worker.clone(),
+            entries,
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=(Duration, Id, &T)> {
+        let time = self.time.clone();
+        let worker = self.worker.clone();
+        self.entries.iter().map(move |(offset, t)| (time + Duration::from_nanos(*offset as u64), worker.clone(), t))
+    }
 }
 
 impl<Id: Clone+'static> Registry<Id> {
@@ -27,7 +78,7 @@ impl<Id: Clone+'static> Registry<Id> {
     /// seen (likely greater or equal to the timestamp of the last event). The end of a
     /// logging stream is indicated only by dropping the associated action, which can be
     /// accomplished with `remove` (or a call to insert, though this is not recommended).
-    pub fn insert<T: 'static, F: FnMut(&Duration, &mut Vec<(Duration, Id, T)>)+'static>(
+    pub fn insert<T: 'static, F: FnMut(&Duration, &mut LogContainer<T, Id>)+'static>(
         &mut self,
         name: &str,
         action: F) -> Option<Box<dyn Any>>
@@ -88,8 +139,8 @@ impl<Id> Flush for Registry<Id> {
 
 /// A buffering logger.
 #[derive(Debug)]
-pub struct Logger<T, E> {
-    inner: Rc<RefCell<LoggerInner<T, E, dyn FnMut(&Duration, &mut Vec<(Duration, E, T)>)>>>,
+pub struct Logger<T, E: Clone> {
+    inner: Rc<RefCell<LoggerInner<T, E, dyn FnMut(&Duration, &mut LogContainer<T, E>)>>>,
 }
 
 impl<T, E: Clone> Clone for Logger<T, E> {
@@ -100,14 +151,14 @@ impl<T, E: Clone> Clone for Logger<T, E> {
     }
 }
 
-struct LoggerInner<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> {
+struct LoggerInner<T, E, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> {
     id:     E,
     /// common instant used for all loggers.
     time:   Instant,
     /// offset to allow re-calibration.
     offset: Duration,
     /// shared buffer of accumulated log events
-    buffer: Vec<(Duration, E, T)>,
+    buffer: LogContainer<T, E>,
     /// action to take on full log buffers.
     action: A,
 }
@@ -116,14 +167,18 @@ impl<T, E: Clone> Logger<T, E> {
     /// Allocates a new shareable logger bound to a write destination.
     pub fn new<F>(time: Instant, offset: Duration, id: E, action: F) -> Self
     where
-        F: FnMut(&Duration, &mut Vec<(Duration, E, T)>)+'static
+        F: FnMut(&Duration, &mut LogContainer<T, E>)+'static
     {
         let inner = LoggerInner {
-            id,
+            id: id.clone(),
             time,
             offset,
             action,
-            buffer: Vec::with_capacity(LoggerInner::<T, E, F>::buffer_capacity()),
+            buffer: LogContainer {
+                time: Duration::from_secs(0),
+                worker: id,
+                entries: Vec::with_capacity(LogContainer::<T, E>::buffer_capacity()),
+            }
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -167,41 +222,33 @@ impl<T, E: Clone> Logger<T, E> {
     }
 }
 
-impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> LoggerInner<T, E, A> {
-
-    /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
-    /// this to size in elements.
-    const BUFFER_SIZE_BYTES: usize = 1 << 13;
-
-    /// The maximum buffer capacity in elements. Returns a number between [Self::BUFFER_SIZE_BYTES]
-    /// and 1, inclusively.
-    // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
-    fn buffer_capacity() -> usize {
-        let size =  ::std::mem::size_of::<(Duration, E, T)>();
-        if size == 0 {
-            Self::BUFFER_SIZE_BYTES
-        } else if size <= Self::BUFFER_SIZE_BYTES {
-            Self::BUFFER_SIZE_BYTES / size
-        } else {
-            1
-        }
-    }
+impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> LoggerInner<T, E, A> {
 
     pub fn log_many<I>(&mut self, events: I)
         where I: IntoIterator, I::Item: Into<T>
     {
         let elapsed = self.time.elapsed() + self.offset;
+
+        if self.buffer.entries.is_empty() {
+            self.buffer.time = elapsed.clone();
+        } else if self.buffer.time + Duration::from_nanos(u32::MAX as u64) < elapsed {
+            // Current time cannot be encoded as buffer.time + u32 nanoseconds
+            (self.action)(&elapsed, &mut self.buffer);
+            self.buffer.entries.clear();
+            self.buffer.time = elapsed;
+        }
+
         for event in events {
-            self.buffer.push((elapsed, self.id.clone(), event.into()));
-            if self.buffer.len() == self.buffer.capacity() {
+            self.buffer.push(elapsed, event.into());
+            if self.buffer.entries.len() == self.buffer.entries.capacity() {
                 // Would call `self.flush()`, but for `RefCell` panic.
                 (self.action)(&elapsed, &mut self.buffer);
                 // The buffer clear could plausibly be removed, changing the semantics but allowing users
                 // to do in-place updates without forcing them to take ownership.
-                self.buffer.clear();
-                let buffer_capacity = self.buffer.capacity();
-                if buffer_capacity < Self::buffer_capacity() {
-                    self.buffer.reserve((buffer_capacity+1).next_power_of_two());
+                self.buffer.entries.clear();
+                let buffer_capacity = self.buffer.entries.capacity();
+                if buffer_capacity < LogContainer::<T, E>::buffer_capacity() {
+                    self.buffer.entries.reserve((buffer_capacity+1).next_power_of_two());
                 }
             }
         }
@@ -209,16 +256,16 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Logg
 }
 
 /// Bit weird, because we only have to flush on the *last* drop, but this should be ok.
-impl<T, E> Drop for Logger<T, E> {
+impl<T, E: Clone> Drop for Logger<T, E> {
     fn drop(&mut self) {
         // Avoid sending out empty buffers just because of drops.
-        if !self.inner.borrow().buffer.is_empty() {
+        if !self.inner.borrow().buffer.entries.is_empty() {
             self.flush();
         }
     }
 }
 
-impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Debug for LoggerInner<T, E, A>
+impl<T, E, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> Debug for LoggerInner<T, E, A>
 where
     E: Debug,
     T: Debug,
@@ -229,7 +276,7 @@ where
             .field("time", &self.time)
             .field("offset", &self.offset)
             .field("action", &"FnMut")
-            .field("buffer", &self.buffer)
+            .field("buffer", &self.buffer.entries)
             .finish()
     }
 }
@@ -240,18 +287,18 @@ trait Flush {
     fn flush(&mut self);
 }
 
-impl<T, E> Flush for Logger<T, E> {
+impl<T, E: Clone> Flush for Logger<T, E> {
     fn flush(&mut self) {
         self.inner.borrow_mut().flush()
     }
 }
 
-impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Flush for LoggerInner<T, E, A> {
+impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> Flush for LoggerInner<T, E, A> {
     fn flush(&mut self) {
         let elapsed = self.time.elapsed() + self.offset;
-        if !self.buffer.is_empty() {
+        if !self.buffer.entries.is_empty() {
             (self.action)(&elapsed, &mut self.buffer);
-            self.buffer.clear();
+            self.buffer.entries.clear();
             // NB: This does not re-allocate any specific size if the buffer has been
             // taken. The intent is that the geometric growth in `log_many` should be
             // enough to ensure that we do not send too many small buffers, nor do we
@@ -259,7 +306,11 @@ impl<T, E, A: ?Sized + FnMut(&Duration, &mut Vec<(Duration, E, T)>)> Flush for L
         }
         else {
             // Avoid swapping resources for empty buffers.
-            (self.action)(&elapsed, &mut Vec::new());
+            (self.action)(&elapsed, &mut LogContainer {
+                time: elapsed,
+                worker: self.id.clone(),
+                entries: Vec::new(),
+            });
         }
     }
 }

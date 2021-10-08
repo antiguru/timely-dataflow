@@ -10,17 +10,19 @@ pub type TimelyLogger = Logger<TimelyEvent>;
 pub type TimelyProgressLogger = Logger<TimelyProgressEvent>;
 
 use std::time::Duration;
+
+use crate::logging_core::LogContainer;
 use crate::dataflow::operators::capture::{Event, EventPusher};
 
 /// Logs events as a timely stream, with progress statements.
-pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+pub struct BatchLogger<T, E, P> where P: EventPusher<Duration, LogContainer<T, E>> {
     // None when the logging stream is closed
     time: Duration,
     event_pusher: P,
     _phantom: ::std::marker::PhantomData<(E, T)>,
 }
 
-impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+impl<T, E: Clone, P> BatchLogger<T, E, P> where P: EventPusher<Duration, LogContainer<T, E>> {
     /// Creates a new batch logger.
     pub fn new(event_pusher: P) -> Self {
         BatchLogger {
@@ -30,9 +32,9 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, 
         }
     }
     /// Publishes a batch of logged events and advances the capability.
-    pub fn publish_batch(&mut self, &time: &Duration, data: &mut Vec<(Duration, E, T)>) {
-        if !data.is_empty() {
-            self.event_pusher.push(Event::Messages(self.time, data.drain(..).collect()));
+    pub fn publish_batch(&mut self, &time: &Duration, data: &mut LogContainer<T, E>) {
+        if !data.entries.is_empty() {
+            self.event_pusher.push(Event::Messages(self.time, data.take()));
         }
         if self.time < time {
             let new_frontier = time;
@@ -42,7 +44,7 @@ impl<T, E, P> BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, 
         self.time = time;
     }
 }
-impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, (Duration, E, T)> {
+impl<T, E, P> Drop for BatchLogger<T, E, P> where P: EventPusher<Duration, LogContainer<T, E>> {
     fn drop(&mut self) {
         self.event_pusher.push(Event::Progress(vec![(self.time, -1)]));
     }
@@ -226,12 +228,13 @@ pub struct GuardedProgressEvent {
     pub is_start: bool,
 }
 
-#[derive(Serialize, Deserialize, Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
+// #[derive(Serialize, Deserialize, Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Identifier of the worker that generated a log line
-pub struct TimelySetup {
-    /// Worker index
-    pub index: usize,
-}
+pub type TimelySetup = usize;
+// pub struct TimelySetup {
+//     /// Worker index
+//     pub index: usize,
+// }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel

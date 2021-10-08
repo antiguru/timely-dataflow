@@ -330,6 +330,51 @@ mod rc {
     }
 }
 
+mod logging {
+    use logging_core::LogContainer;
+
+    use crate::{Container, IntoAllocated};
+    use crate::message::RefOrMut;
+    use std::time::Duration;
+
+    impl<T: Clone+'static, E: Container> Container for LogContainer<T, E> {
+        type Allocation = ();
+
+        fn hollow(self) -> Self::Allocation {
+            ()
+        }
+
+        fn len(&self) -> usize {
+            self.entries.len()
+        }
+
+        fn is_empty(&self) -> bool {
+            self.entries.is_empty()
+        }
+
+        fn ensure_capacity(&mut self) {
+            // nop
+        }
+    }
+
+    impl<T: Clone+'static, E: Container> IntoAllocated<LogContainer<T, E>> for () {
+        fn assemble_new(allocated: RefOrMut<LogContainer<T, E>>) -> LogContainer<T, E> {
+            match allocated {
+                RefOrMut::Mut(r) => LogContainer {
+                    time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.time)),
+                    worker: <E as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.worker)),
+                    entries: <Vec<(u32, T)> as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.entries)),
+                },
+                RefOrMut::Ref(r) => LogContainer {
+                    time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Ref(&r.time)),
+                    worker: E::Allocation::assemble_new(RefOrMut::Ref(&r.worker)),
+                    entries: <Vec<(u32, T)> as Container>::Allocation::assemble_new(RefOrMut::Ref(&r.entries)),
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::{IntoAllocated, Container};
