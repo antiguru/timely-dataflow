@@ -1,10 +1,12 @@
 //! Specifications for containers and allocations
 
+mod message;
+
 use std::num::*;
 
 use paste::paste;
 
-use crate::message::RefOrMut;
+pub use crate::message::RefOrMut;
 
 /// A container transferring data through dataflow edges
 ///

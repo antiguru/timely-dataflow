@@ -89,7 +89,7 @@ extern crate timely_bytes as bytes;
 extern crate timely_logging as logging_core;
 
 pub mod allocator;
-pub mod container;
+pub use timely_container as container;
 pub mod networking;
 pub mod initialize;
 pub mod logging;
