@@ -78,6 +78,8 @@ impl<T: Timestamp, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationCont
     }
 }
 
+impl<T: Timestamp, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContract<T, D> for Exchange<Vec<D>, D, F> { }
+
 impl<C, D, F> Debug for Exchange<C, D, F> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Exchange").finish()
