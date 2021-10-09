@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use std::time::{Instant, Duration};
 use std::fmt::{self, Debug};
 use std::convert::TryFrom;
+use std::ops::RangeBounds;
 
 use abomonation_derive::Abomonation;
 use timely_container::{Container, IntoAllocated, RefOrMut};
@@ -60,6 +61,12 @@ impl<T, Id: Clone> LogContainer<T, Id> {
         let time = self.time;
         let worker = self.worker.clone();
         self.entries.iter().map(move |(offset, t)| (time + Duration::from_nanos(*offset as u64), worker.clone(), t))
+    }
+
+    pub fn drain<'a, R: RangeBounds<usize>>(&'a mut self, range: R) -> impl Iterator<Item=(Duration, Id, T)> + 'a {
+        let time = self.time;
+        let worker = self.worker.clone();
+        self.entries.drain(range).map(move |(offset, t)| (time + Duration::from_nanos(offset as u64), worker.clone(), t))
     }
 }
 
