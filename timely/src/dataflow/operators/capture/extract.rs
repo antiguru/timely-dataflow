@@ -56,23 +56,8 @@ impl<T: Ord, C: Container> Extract<T, C> for ::std::sync::mpsc::Receiver<Event<T
                 result.push((time, data));
             }
         }
-        result.sort_by(|x,y| x.0.cmp(&y.0));
-
-        // let mut current = 0;
-        // for i in 1 .. result.len() {
-        //     if result[current].0 == result[i].0 {
-        //         let dataz = ::std::mem::replace(&mut result[i].1, Vec::new());
-        //         result[current].1.extend(dataz);
-        //     }
-        //     else {
-        //         current = i;
-        //     }
-        // }
-
-        // for &mut (_, ref mut data) in &mut result {
-        //     data.sort();
-        // }
         result.retain(|x| !x.1.is_empty());
+        result.sort_by(|x,y| x.0.cmp(&y.0));
         result
     }
 }

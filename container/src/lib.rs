@@ -37,9 +37,7 @@ pub trait Container: Sized + 'static {
 
 impl Container for () {
     type Allocation = ();
-    fn hollow(self) -> Self::Allocation {
-        ()
-    }
+    fn hollow(self) -> Self::Allocation { }
 
     fn len(&self) -> usize {
         0
@@ -76,18 +74,18 @@ impl<T: Clone + 'static> Container for Vec<T> {
     }
 
     fn len(&self) -> usize {
-        Vec::len(&self)
+        Vec::len(self)
     }
 
     fn is_empty(&self) -> bool {
-        Vec::is_empty(&self)
+        Vec::is_empty(self)
     }
 
     fn ensure_capacity(&mut self) {
-        let len = self.len();
+        let capacity = self.capacity();
         let desired_capacity = buffer::default_capacity::<T>();
-        if len < desired_capacity {
-            self.reserve(desired_capacity - len);
+        if capacity < desired_capacity {
+            self.reserve(desired_capacity - capacity);
         }
     }
 }
@@ -111,9 +109,7 @@ pub trait IntoAllocated<T> {
 
 
 impl IntoAllocated<()> for () {
-    fn assemble_new(_allocated: RefOrMut<()>) -> () {
-        ()
-    }
+    fn assemble_new(_allocated: RefOrMut<()>) { }
 }
 
 pub mod buffer {
@@ -178,7 +174,7 @@ macro_rules! implement_clone_container {
         $(
             impl Container for $index_type {
                 type Allocation = ();
-                fn hollow(self) -> Self::Allocation { () }
+                fn hollow(self) { }
                 fn len(&self) -> usize { 0 }
                 fn is_empty(&self) -> bool { true }
             }
@@ -306,9 +302,7 @@ mod rc {
     impl<T: Container> Container for Rc<T> {
         type Allocation = ();
 
-        fn hollow(self) -> Self::Allocation {
-            ()
-        }
+        fn hollow(self) { }
 
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()

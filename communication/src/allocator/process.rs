@@ -207,6 +207,7 @@ impl<T> Clone for Pusher<T> {
 
 impl<T: Container> Push<T> for Pusher<T> {
     #[inline] fn push(&mut self, element: Option<T>, _allocation: &mut Option<T::Allocation>) {
+        // Ignore allocation as we do not have a back channel through `self.target`.
         if let Some(element) = element {
             // The remote endpoint could be shut down, and so
             // it is not fundamentally an error to fail to send.
