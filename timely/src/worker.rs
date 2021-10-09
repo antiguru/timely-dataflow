@@ -9,8 +9,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::Arc;
 
-use crate::communication::Message;
-use crate::communication::Container;
+use crate::communication::{Container, Message};
 use crate::communication::{Allocate, Data, Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
 use crate::scheduling::{Schedule, Scheduler, Activations};

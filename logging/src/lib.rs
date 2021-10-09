@@ -45,14 +45,14 @@ impl<T, Id: Clone> LogContainer<T, Id> {
         let entries = ::std::mem::take(&mut self.entries);
         self.entries = Vec::with_capacity(Self::buffer_capacity());
         Self {
-            time: self.time.clone(),
+            time: self.time,
             worker: self.worker.clone(),
             entries,
         }
     }
 
     pub fn iter(&self) -> impl Iterator<Item=(Duration, Id, &T)> {
-        let time = self.time.clone();
+        let time = self.time;
         let worker = self.worker.clone();
         self.entries.iter().map(move |(offset, t)| (time + Duration::from_nanos(*offset as u64), worker.clone(), t))
     }
@@ -218,7 +218,7 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> LoggerI
         let elapsed = self.time.elapsed() + self.offset;
 
         if self.buffer.entries.is_empty() {
-            self.buffer.time = elapsed.clone();
+            self.buffer.time = elapsed;
         } else if self.buffer.time + Duration::from_nanos(u32::MAX as u64) < elapsed {
             // Current time cannot be encoded as buffer.time + u32 nanoseconds
             (self.action)(&elapsed, &mut self.buffer);

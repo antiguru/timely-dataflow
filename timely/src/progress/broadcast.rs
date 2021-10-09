@@ -5,7 +5,7 @@ use crate::progress::{Location, Port};
 use crate::communication::{Message, Push, Pull, Container};
 use crate::logging::TimelyLogger as Logger;
 use crate::logging::TimelyProgressLogger as ProgressLogger;
-use crate::communication::message::{MessageAllocation, RefOrMut};
+use crate::communication::message::RefOrMut;
 
 /// A list of progress updates corresponding to `((child_scope, [in/out]_port, timestamp), delta)`
 pub type ProgressVec<T> = Vec<((Location, T), i64)>;
@@ -15,7 +15,7 @@ pub type ProgressMsg<T> = Message<(usize, usize, ProgressVec<T>)>;
 
 /// Manages broadcasting of progress updates to and receiving updates from workers.
 pub struct Progcaster<T:Timestamp> {
-    allocation: Option<MessageAllocation<Option<((), (), ProgressVec<T>)>>>,
+    allocation: Option<<ProgressMsg<T> as Container>::Allocation>,
     pushers: Vec<Box<dyn Push<ProgressMsg<T>>>>,
     puller: Box<dyn Pull<ProgressMsg<T>>>,
     /// Source worker index
