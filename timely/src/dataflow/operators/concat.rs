@@ -1,7 +1,7 @@
 //! Merges the contents of multiple streams.
 
 
-use crate::communication::{Container, IntoAllocated};
+use crate::communication::Container;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::{CoreStream, Scope};
 
@@ -23,7 +23,7 @@ pub trait Concat<G: Scope, D: Container> {
     fn concat(&self, _: &CoreStream<G, D>) -> CoreStream<G, D>;
 }
 
-impl<G: Scope, D: Container+Clone+'static> Concat<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container> Concat<G, D> for CoreStream<G, D> {
     fn concat(&self, other: &CoreStream<G, D>) -> CoreStream<G, D> {
         self.scope().concatenate(vec![self, other].into_iter().cloned())
     }
@@ -52,7 +52,7 @@ pub trait Concatenate<G: Scope, D: Container> {
         I: IntoIterator<Item=CoreStream<G, D>>;
 }
 
-impl<G: Scope, D: Container+Clone> Concatenate<G, D> for CoreStream<G, D> {
+impl<G: Scope, D: Container> Concatenate<G, D> for CoreStream<G, D> {
     fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
         I: IntoIterator<Item=CoreStream<G, D>>
@@ -62,10 +62,7 @@ impl<G: Scope, D: Container+Clone> Concatenate<G, D> for CoreStream<G, D> {
     }
 }
 
-impl<G: Scope, D: Container+Clone> Concatenate<G, D> for G
-where
-    D::Allocation: IntoAllocated<D>
-{
+impl<G: Scope, D: Container> Concatenate<G, D> for G {
     fn concatenate<I>(&self, sources: I) -> CoreStream<G, D>
     where
         I: IntoIterator<Item=CoreStream<G, D>>

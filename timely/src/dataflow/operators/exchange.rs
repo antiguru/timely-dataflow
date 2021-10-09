@@ -2,7 +2,7 @@
 
 use crate::ExchangeData;
 use crate::dataflow::channels::pact::Exchange as ExchangePact;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Exchange records between workers.
