@@ -8,6 +8,7 @@ use std::fmt::{self, Debug};
 use std::convert::TryFrom;
 
 use abomonation_derive::Abomonation;
+use timely_container::{Container, IntoAllocated, RefOrMut};
 
 pub struct Registry<Id> {
     /// A worker-specific identifier.
@@ -18,7 +19,7 @@ pub struct Registry<Id> {
     time: Instant,
 }
 
-#[derive(Abomonation)]
+#[derive(Abomonation, Debug)]
 pub struct LogContainer<T, Id> {
     pub time: Duration,
     pub worker: Id,
@@ -26,22 +27,13 @@ pub struct LogContainer<T, Id> {
 }
 
 impl<T, Id: Clone> LogContainer<T, Id> {
-    /// The upper limit for buffers to allocate, size in bytes. [Self::buffer_capacity] converts
-    /// this to size in elements.
-    const BUFFER_SIZE_BYTES: usize = 1 << 13;
+    fn new(time: Duration, worker: Id) -> Self {
+        let entries = Vec::with_capacity(Self::buffer_capacity());
+        Self { time, worker, entries }
+    }
 
-    /// The maximum buffer capacity in elements. Returns a number between [Self::BUFFER_SIZE_BYTES]
-    /// and 1, inclusively.
-    // TODO: This fn is not const because it cannot depend on non-Sized generic parameters
     fn buffer_capacity() -> usize {
-        let size =  ::std::mem::size_of::<(u32, T)>();
-        if size == 0 {
-            Self::BUFFER_SIZE_BYTES
-        } else if size <= Self::BUFFER_SIZE_BYTES {
-            Self::BUFFER_SIZE_BYTES / size
-        } else {
-            1
-        }
+        timely_container::buffer::default_capacity::<(u32, T)>()
     }
 
     fn push(&mut self, time: Duration, data: T) {
@@ -174,11 +166,7 @@ impl<T, E: Clone> Logger<T, E> {
             time,
             offset,
             action,
-            buffer: LogContainer {
-                time: Duration::from_secs(0),
-                worker: id,
-                entries: Vec::with_capacity(LogContainer::<T, E>::buffer_capacity()),
-            }
+            buffer: LogContainer::new(Duration::from_secs(0), id),
         };
         let inner = Rc::new(RefCell::new(inner));
         Logger { inner }
@@ -311,6 +299,59 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> Flush f
                 worker: self.id.clone(),
                 entries: Vec::new(),
             });
+        }
+    }
+}
+
+impl<T: Clone+'static, E: Container> Container for LogContainer<T, E> {
+    type Allocation = Vec<(u32, T)>;
+
+    fn hollow(mut self) -> Self::Allocation {
+        self.entries.clear();
+        self.entries
+    }
+
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    fn ensure_capacity(&mut self) {
+        self.entries.ensure_capacity();
+    }
+}
+
+impl<T: Clone+'static, E: Container> IntoAllocated<LogContainer<T, E>> for Vec<(u32, T)> {
+    fn assemble(self, allocated: RefOrMut<LogContainer<T, E>>) -> LogContainer<T, E> where Self: Sized {
+        match allocated {
+            RefOrMut::Mut(r) => LogContainer {
+                time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.time)),
+                worker: <E as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.worker)),
+                entries: self.assemble(RefOrMut::Mut(&mut r.entries)),
+            },
+            RefOrMut::Ref(r) => LogContainer {
+                time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Ref(&r.time)),
+                worker: E::Allocation::assemble_new(RefOrMut::Ref(&r.worker)),
+                entries: self.assemble(RefOrMut::Ref(&r.entries)),
+            }
+        }
+    }
+
+    fn assemble_new(allocated: RefOrMut<LogContainer<T, E>>) -> LogContainer<T, E> {
+        match allocated {
+            RefOrMut::Mut(r) => LogContainer {
+                time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.time)),
+                worker: <E as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.worker)),
+                entries: <Vec<(u32, T)> as Container>::Allocation::assemble_new(RefOrMut::Mut(&mut r.entries)),
+            },
+            RefOrMut::Ref(r) => LogContainer {
+                time: <Duration as Container>::Allocation::assemble_new(RefOrMut::Ref(&r.time)),
+                worker: E::Allocation::assemble_new(RefOrMut::Ref(&r.worker)),
+                entries: <Vec<(u32, T)> as Container>::Allocation::assemble_new(RefOrMut::Ref(&r.entries)),
+            }
         }
     }
 }

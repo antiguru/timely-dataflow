@@ -128,22 +128,25 @@ pub mod binary {
     use super::{Event, EventPusher, EventIterator};
 
     /// A wrapper for `W: Write` implementing `EventPusher<T, D>`.
-    pub struct EventWriter<T, D, W: ::std::io::Write> {
+    pub struct EventWriterCore<T, D, W: ::std::io::Write> {
         stream: W,
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    impl<T, D, W: ::std::io::Write> EventWriter<T, D, W> {
+    /// [EventWriterCore] specialized to vector-based containers.
+    pub type EventWriter<T, D, W> = EventWriterCore<T, Vec<D>, W>;
+
+    impl<T, D, W: ::std::io::Write> EventWriterCore<T, D, W> {
         /// Allocates a new `EventWriter` wrapping a supplied writer.
-        pub fn new(w: W) -> EventWriter<T, D, W> {
-            EventWriter {
+        pub fn new(w: W) -> Self {
+            Self {
                 stream: w,
                 phant: ::std::marker::PhantomData,
             }
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriter<T, D, W> {
+    impl<T: Abomonation, D: Abomonation, W: ::std::io::Write> EventPusher<T, D> for EventWriterCore<T, D, W> {
         fn push(&mut self, event: Event<T, D>) {
             // TODO: `push` has no mechanism to report errors, so we `unwrap`.
             unsafe { ::abomonation::encode(&event, &mut self.stream).expect("Event abomonation/write failed"); }
@@ -151,7 +154,7 @@ pub mod binary {
     }
 
     /// A Wrapper for `R: Read` implementing `EventIterator<T, D>`.
-    pub struct EventReader<T, D, R: ::std::io::Read> {
+    pub struct EventReaderCore<T, D, R: ::std::io::Read> {
         reader: R,
         bytes: Vec<u8>,
         buff1: Vec<u8>,
@@ -161,10 +164,13 @@ pub mod binary {
         phant: ::std::marker::PhantomData<(T,D)>,
     }
 
-    impl<T, D, R: ::std::io::Read> EventReader<T, D, R> {
+    /// [EventReaderCore] specialized to vector-based containers.
+    pub type EventReader<T, D, R> = EventReaderCore<T, Vec<D>, R>;
+
+    impl<T, D, R: ::std::io::Read> EventReaderCore<T, D, R> {
         /// Allocates a new `EventReader` wrapping a supplied reader.
-        pub fn new(r: R) -> EventReader<T, D, R> {
-            EventReader {
+        pub fn new(r: R) -> Self {
+            Self {
                 reader: r,
                 bytes: vec![0u8; 1 << 20],
                 buff1: vec![],
@@ -176,9 +182,8 @@ pub mod binary {
         }
     }
 
-    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReader<T, D, R> {
+    impl<T: Abomonation, D: Abomonation, R: ::std::io::Read> EventIterator<T, D> for EventReaderCore<T, D, R> {
         fn next(&mut self) -> Option<&Event<T, D>> {
-
             // if we can decode something, we should just return it! :D
             if unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.is_some() {
                 let (item, rest) = unsafe { ::abomonation::decode::<Event<T,D>>(&mut self.buff1[self.consumed..]) }.unwrap();

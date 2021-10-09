@@ -214,7 +214,9 @@ where
 /// }).unwrap();
 ///
 /// // the extracted data should have data (0..10) thrice at timestamp 0.
-/// assert_eq!(recv.extract()[0].1, (0..30).map(|x| x / 3).collect::<Vec<_>>());
+/// let mut received = recv.extract().into_iter().flat_map(|x| x.1).collect::<Vec<_>>();
+/// received.sort();
+/// assert_eq!(received, (0..30).map(|x| x / 3).collect::<Vec<_>>());
 /// ```
 pub fn execute<T, F>(
     mut config: Config,
@@ -233,12 +235,12 @@ where
 
                 use ::std::net::TcpStream;
                 use crate::logging::BatchLogger;
-                use crate::dataflow::operators::capture::EventWriter;
+                use crate::dataflow::operators::capture::EventWriterCore;
 
                 eprintln!("enabled COMM logging to {}", addr);
 
                 if let Ok(stream) = TcpStream::connect(&addr) {
-                    let writer = EventWriter::new(stream);
+                    let writer = EventWriterCore::new(stream);
                     let mut logger = BatchLogger::new(writer);
                     result = Some(crate::logging_core::Logger::new(
                         ::std::time::Instant::now(),
@@ -267,10 +269,10 @@ where
 
             use ::std::net::TcpStream;
             use crate::logging::{BatchLogger, TimelyEvent};
-            use crate::dataflow::operators::capture::EventWriter;
+            use crate::dataflow::operators::capture::EventWriterCore;
 
             if let Ok(stream) = TcpStream::connect(&addr) {
-                let writer = EventWriter::new(stream);
+                let writer = EventWriterCore::new(stream);
                 let mut logger = BatchLogger::new(writer);
                 worker.log_register()
                     .insert::<TimelyEvent,_>("timely", move |time, data|

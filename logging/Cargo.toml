@@ -15,3 +15,4 @@ license = "MIT"
 [dependencies]
 abomonation = "0.7.3"
 abomonation_derive = "0.5"
+timely_container = { path = "../container" }
