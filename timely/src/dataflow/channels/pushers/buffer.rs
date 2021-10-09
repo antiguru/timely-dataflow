@@ -181,7 +181,7 @@ pub struct AutoflushSessionCore<'a, T: Timestamp, C: Container, P: Push<BundleCo
 }
 
 /// Auto-flush session specialized to vector-based containers.
-pub type AutoFlushSession<'a, T, D, P> = AutoflushSessionCore<'a, T, Vec<D>, P>;
+pub type AutoflushSession<'a, T, D, P> = AutoflushSessionCore<'a, T, Vec<D>, P>;
 
 impl<'a, T: Timestamp, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> AutoflushSessionCore<'a, T, Vec<D>, P> where T: Eq+Clone+'a, D: 'a {
     /// Transmits a single record.
