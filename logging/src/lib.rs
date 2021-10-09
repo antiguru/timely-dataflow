@@ -37,7 +37,12 @@ impl<T, Id: Clone> LogContainer<T, Id> {
     }
 
     fn push(&mut self, time: Duration, data: T) {
-        let offset = u32::try_from(time.saturating_sub(self.time).as_nanos()).unwrap();
+        let nanotime = match time.checked_sub(self.time) {
+            Some(res) => res,
+            None => Duration::ZERO,
+        }.as_nanos();
+
+        let offset = u32::try_from(nanotime).unwrap();
         self.entries.push((offset, data));
     }
 
