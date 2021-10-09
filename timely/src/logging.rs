@@ -228,13 +228,8 @@ pub struct GuardedProgressEvent {
     pub is_start: bool,
 }
 
-// #[derive(Serialize, Deserialize, Abomonation, Debug, PartialEq, Eq, Hash, Clone, Copy)]
 /// Identifier of the worker that generated a log line
 pub type TimelySetup = usize;
-// pub struct TimelySetup {
-//     /// Worker index
-//     pub index: usize,
-// }
 
 #[derive(Serialize, Deserialize, Abomonation, Debug, Clone, Hash, Eq, PartialEq, Ord, PartialOrd)]
 /// Kind of communication channel
