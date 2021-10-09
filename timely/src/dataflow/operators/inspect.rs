@@ -1,8 +1,9 @@
 //! Extension trait and implementation for observing and action on streamed data.
 
+use crate::communication::Container;
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Stream, Scope, CoreStream};
 use crate::dataflow::operators::generic::Operator;
 
 /// Methods to inspect records and batches of records on a stream.
@@ -85,13 +86,25 @@ pub trait Inspect<G: Scope, D: Data> {
 }
 
 impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
+    fn inspect_core<F>(&self, mut func: F) -> Stream<G, D> where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>) + 'static {
+        self.inspect_container(move |r| func(r.map(|(t, c)| (t, &c[..]))))
+    }
+}
 
-    fn inspect_core<F>(&self, mut func: F) -> Stream<G, D>
-    where F: FnMut(Result<(&G::Timestamp, &[D]), &[G::Timestamp]>)+'static
+/// Inspect containers
+pub trait InspectCore<G: Scope, C: Container> {
+    /// Inspect containers
+    fn inspect_container<F>(&self, func: F) -> CoreStream<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
+}
+
+impl<G: Scope, C: Container> InspectCore<G, C> for CoreStream<G, C> {
+
+    fn inspect_container<F>(&self, mut func: F) -> CoreStream<G, C>
+    where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static
     {
         use crate::progress::timestamp::Timestamp;
-        let mut vector = Vec::new();
         let mut frontier = crate::progress::Antichain::from_elem(G::Timestamp::minimum());
+        let mut allocation = None;
         self.unary_frontier(Pipeline, "InspectBatch", move |_,_| move |input, output| {
             if input.frontier.frontier() != frontier.borrow() {
                 frontier.clear();
@@ -99,9 +112,9 @@ impl<G: Scope, D: Data> Inspect<G, D> for Stream<G, D> {
                 func(Err(frontier.elements()));
             }
             input.for_each(|time, data| {
-                data.swap(&mut vector);
-                func(Ok((&time, &vector[..])));
-                output.session(&time).give_vec(&mut vector);
+                let data = data.assemble(&mut allocation);
+                func(Ok((&time, &data)));
+                output.session(&time).give_container(data, &mut allocation);
             });
         })
     }
