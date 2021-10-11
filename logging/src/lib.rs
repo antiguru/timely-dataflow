@@ -28,7 +28,7 @@ pub struct LogContainer<T, Id> {
 }
 
 impl<T, Id: Clone> LogContainer<T, Id> {
-    fn new(time: Duration, worker: Id) -> Self {
+    pub fn new(time: Duration, worker: Id) -> Self {
         let entries = Vec::with_capacity(Self::buffer_capacity());
         Self { time, worker, entries }
     }
@@ -37,13 +37,15 @@ impl<T, Id: Clone> LogContainer<T, Id> {
         timely_container::buffer::default_capacity::<(u32, T)>()
     }
 
-    fn push(&mut self, time: Duration, data: T) {
-        let nanotime = match time.checked_sub(self.time) {
-            Some(res) => res,
-            None => Duration::from_secs(0),
-        }.as_nanos();
-
-        let offset = u32::try_from(nanotime).unwrap();
+    pub fn push<F: FnMut(&mut Self)>(&mut self, time: Duration, data: T, mut overflow_action: F) {
+        if time < self.time
+            || self.time + Duration::from_nanos(u32::MAX as u64) < time
+            || self.entries.len() == self.entries.capacity() {
+            // provided time outside permissible range or full
+            overflow_action(self);
+        }
+        self.time = time;
+        let offset = u32::try_from(time.as_nanos() - self.time.as_nanos()).unwrap();
         self.entries.push((offset, data));
     }
 
@@ -231,26 +233,20 @@ impl<T, E: Clone, A: ?Sized + FnMut(&Duration, &mut LogContainer<T, E>)> LoggerI
 
         if self.buffer.entries.is_empty() {
             self.buffer.time = elapsed;
-        } else if self.buffer.time + Duration::from_nanos(u32::MAX as u64) < elapsed {
-            // Current time cannot be encoded as buffer.time + u32 nanoseconds
-            (self.action)(&elapsed, &mut self.buffer);
-            self.buffer.entries.clear();
-            self.buffer.time = elapsed;
         }
 
         for event in events {
-            self.buffer.push(elapsed, event.into());
-            if self.buffer.entries.len() == self.buffer.entries.capacity() {
-                // Would call `self.flush()`, but for `RefCell` panic.
-                (self.action)(&elapsed, &mut self.buffer);
+            let action = &mut self.action;
+            self.buffer.push(elapsed, event.into(), |buffer| {
+                (action)(&elapsed, buffer);
                 // The buffer clear could plausibly be removed, changing the semantics but allowing users
                 // to do in-place updates without forcing them to take ownership.
-                self.buffer.entries.clear();
-                let buffer_capacity = self.buffer.entries.capacity();
+                buffer.entries.clear();
+                let buffer_capacity = buffer.entries.capacity();
                 if buffer_capacity < LogContainer::<T, E>::buffer_capacity() {
-                    self.buffer.entries.reserve((buffer_capacity+1).next_power_of_two());
+                    buffer.entries.reserve((buffer_capacity+1).next_power_of_two());
                 }
-            }
+            });
         }
     }
 }
