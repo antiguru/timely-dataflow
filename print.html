@@ -166,7 +166,7 @@
                 <div id="content" class="content">
                     <main>
                         <h1><a class="header" href="#timely-dataflow" id="timely-dataflow">Timely Dataflow</a></h1>
-<p>In this book we will work through the motivation and technical details behind <a href="https://github.com/frankmcsherry/timely-dataflow">timely dataflow</a>, which is both a system for implementing distributed streaming computation, and if you look at it right, a way to structure computation generally.</p>
+<p>In this book we will work through the motivation and technical details behind <a href="https://github.com/TimelyDataflow/timely-dataflow">timely dataflow</a>, which is both a system for implementing distributed streaming computation, and if you look at it right, a way to structure computation generally.</p>
 <p>Timely dataflow arose from <a href="https://www.microsoft.com/en-us/research/wp-content/uploads/2013/11/naiad_sosp2013.pdf">work at Microsoft Research</a>, where a group of us worked on building scalable, distributed data processing platforms. Our experience was that other systems did not provide both <em>expressive computation</em> and <em>high performance</em>. Efficient systems would only let you write restricted programs, and expressive systems employed synchronous and otherwise inefficient execution.</p>
 <p>Our goal was to provide a not-unpleasant experience where you could write sophisticated streaming computations (e.g. with iterative control flow), which nonetheless compile down to systems that execute with only a modicum of overhead and synchronization.</p>
 <h1><a class="header" href="#motivation" id="motivation">Motivation</a></h1>
@@ -489,7 +489,7 @@ fn main() {
 <p>There is a time and a place for dataflow programming and for control flow programming. We are going to try and get the best of both.</p>
 <h1><a class="header" href="#logical-timestamps" id="logical-timestamps">Logical Timestamps</a></h1>
 <p>When dataflow programs move data around arbitrarily, it becomes hard to correlate the produced outputs with the supplied inputs. If we supply a stream of bank transactions as input, and the output is a stream of bank balances, how can we know which input transactions are reflected in which output balances?</p>
-<p>The standard approach to this problem is to install <em>timestamps</em> on the data. Each records gets a logical timestamp associated with it that indicates <em>when</em> it should be thought to happen. This is not necessarily &quot;when&quot; in terms of the date, time, or specific nanosecond the record was emitted; a timestamp could simply be a sequence number identifying a batch of input records. Or, and we will get into the terrifying details later, it could be much more complicated than this.</p>
+<p>The standard approach to this problem is to install <em>timestamps</em> on the data. Each record gets a logical timestamp associated with it that indicates <em>when</em> it should be thought to happen. This is not necessarily &quot;when&quot; in terms of the date, time, or specific nanosecond the record was emitted; a timestamp could simply be a sequence number identifying a batch of input records. Or, and we will get into the terrifying details later, it could be much more complicated than this.</p>
 <p>Timestamps are what allow us to correlate inputs and outputs. When we introduce records with some logical timestamp, unless our dataflow computation changes the timestamps, we expect to see corresponding outputs with that same timestamp.</p>
 <h2><a class="header" href="#an-example-2" id="an-example-2">An example</a></h2>
 <p>Remember from the dataflow section how when we remove the coordination from our <code>examples/hello.rs</code> program, the output was produced in some horrible order? In fact, each of those records had a timestamp associated with it that would reveal the correct order; we just weren't printing the timestamp because <code>inspect</code> doesn't have access to it.</p>
@@ -2157,7 +2157,7 @@ impl&lt;T: Clone+Send+Any+Serialize+'static&gt; Data for T { }
 pub struct Target {
     /// Index of the target operator.
     pub index: usize,
-    /// Nmuber of the input port to the operator.
+    /// Number of the input port to the operator.
     pub port: usize,
 }
 </code></pre>
