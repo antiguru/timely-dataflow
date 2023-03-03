@@ -21,11 +21,11 @@ pub trait SharedStream<S: Scope, C: Container> {
     ///            .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```
-    fn shared(&self) -> StreamCore<S, Rc<C>>;
+    fn shared(self) -> StreamCore<S, Rc<C>>;
 }
 
 impl<S: Scope, C: Container> SharedStream<S, C> for StreamCore<S, C> {
-    fn shared(&self) -> StreamCore<S, Rc<C>> {
+    fn shared(self) -> StreamCore<S, Rc<C>> {
         let mut container = Default::default();
         self.unary(Pipeline, "Shared", move |_, _| {
             move |input, output| {
@@ -51,6 +51,7 @@ mod test {
     fn test_shared() {
         let output = crate::example(|scope| {
             let shared = vec![Ok(0), Err(())].to_stream(scope).shared();
+            let shared2 = shared.clone();
             scope
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {
@@ -62,7 +63,7 @@ mod test {
                             });
                         }
                     }),
-                    shared.unary(Pipeline, "read shared 2", |_, _| {
+                    shared2.unary(Pipeline, "read shared 2", |_, _| {
                         let mut container = Default::default();
                         move |input, output| {
                             input.for_each(|time, data| {

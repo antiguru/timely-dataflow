@@ -48,7 +48,7 @@ fn main() {
 
             // use the stream of edges
             graph.binary_notify(
-                &stream,
+                stream,
                 Exchange::new(|x: &(u32, u32)| u64::from(x.0)),
                 Exchange::new(|x: &(u32, u32)| u64::from(x.0)),
                 "BFS",

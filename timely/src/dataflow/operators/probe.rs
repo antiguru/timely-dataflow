@@ -44,7 +44,7 @@ pub trait Probe<G: Scope, D: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe(&self) -> Handle<G::Timestamp>;
+    fn probe(self) -> Handle<G::Timestamp>;
 
     /// Inserts a progress probe in a stream.
     ///
@@ -76,18 +76,18 @@ pub trait Probe<G: Scope, D: Container> {
     ///     }
     /// }).unwrap();
     /// ```
-    fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D>;
+    fn probe_with(self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D>;
 }
 
 impl<G: Scope, D: Container> Probe<G, D> for StreamCore<G, D> {
-    fn probe(&self) -> Handle<G::Timestamp> {
+    fn probe(self) -> Handle<G::Timestamp> {
 
         // the frontier is shared state; scope updates, handle reads.
         let mut handle = Handle::<G::Timestamp>::new();
         self.probe_with(&mut handle);
         handle
     }
-    fn probe_with(&self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D> {
+    fn probe_with(self, handle: &mut Handle<G::Timestamp>) -> StreamCore<G, D> {
 
         let mut builder = OperatorBuilder::new("Probe".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));

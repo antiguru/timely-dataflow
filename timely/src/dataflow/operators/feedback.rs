@@ -129,11 +129,11 @@ pub trait ConnectLoop<G: Scope, D: Container> {
     ///            .connect_loop(handle);
     /// });
     /// ```
-    fn connect_loop(&self, _: HandleCore<G, D>);
+    fn connect_loop(self, _: HandleCore<G, D>);
 }
 
 impl<G: Scope, D: Container> ConnectLoop<G, D> for StreamCore<G, D> {
-    fn connect_loop(&self, helper: HandleCore<G, D>) {
+    fn connect_loop(self, helper: HandleCore<G, D>) {
 
         let mut builder = helper.builder;
         let summary = helper.summary;

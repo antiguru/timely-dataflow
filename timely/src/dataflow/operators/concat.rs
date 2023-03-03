@@ -73,7 +73,7 @@ impl<G: Scope, D: Container> Concatenate<G, D> for G {
         let mut builder = OperatorBuilder::new("Concatenate".to_string(), self.clone());
 
         // create new input handles for each input stream.
-        let mut handles = sources.into_iter().map(|s| builder.new_input(&s, Pipeline)).collect::<Vec<_>>();
+        let mut handles = sources.into_iter().map(|s| builder.new_input(s, Pipeline)).collect::<Vec<_>>();
 
         // create one output handle for the concatenated results.
         let (mut output, result) = builder.new_output();

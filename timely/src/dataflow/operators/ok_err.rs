@@ -30,7 +30,7 @@ pub trait OkErr<S: Scope, D: Data> {
     /// });
     /// ```
     fn ok_err<D1, D2, L>(
-        &self,
+        self,
         logic: L,
     ) -> (Stream<S, D1>, Stream<S, D2>)
 
@@ -43,7 +43,7 @@ pub trait OkErr<S: Scope, D: Data> {
 
 impl<S: Scope, D: Data> OkErr<S, D> for Stream<S, D> {
     fn ok_err<D1, D2, L>(
-        &self,
+        self,
         mut logic: L,
     ) -> (Stream<S, D1>, Stream<S, D2>)
 
