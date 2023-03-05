@@ -32,7 +32,7 @@ use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{StreamCore, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
 use crate::dataflow::operators::delay::Delay;
 
@@ -56,6 +56,7 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
 }
 
 use crate::dataflow::scopes::child::Iterative;
+use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
@@ -73,17 +74,17 @@ pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
     ///     });
     /// });
     /// ```
-    fn enter_at<'a, F:FnMut(&D)->T+'static>(self, scope: &Iterative<'a, G, T>, initial: F) -> Stream<Iterative<'a, G, T>, D> ;
+    fn enter_at<'a, F:FnMut(&D)->T+'static>(self, scope: &Iterative<'a, G, T>, initial: F) -> OwnedStream<Iterative<'a, G, T>, Vec<D>> ;
 }
 
 impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Timestamp, T>, Vec<D>>> EnterAt<G, T, D> for E {
     fn enter_at<'a, F:FnMut(&D)->T+'static>(self, scope: &Iterative<'a, G, T>, mut initial: F) ->
-        Stream<Iterative<'a, G, T>, D> {
+        OwnedStream<Iterative<'a, G, T>, Vec<D>> {
             self.enter(scope).delay(move |datum, time| Product::new(time.clone().to_outer(), initial(datum)))
     }
 }
 
-impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container> Enter<G, T, C> for StreamCore<G, C> {
+impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Data+Container, S: StreamLike<G, C>> Enter<G, T, C> for S {
     fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;

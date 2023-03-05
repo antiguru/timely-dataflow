@@ -6,6 +6,7 @@ use crate::{Data, ExchangeData};
 use crate::dataflow::{Stream, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
 use crate::dataflow::channels::pact::Exchange;
+use crate::dataflow::stream::OwnedStream;
 
 /// Generic intra-timestamp aggregation
 ///
@@ -64,7 +65,7 @@ pub trait Aggregate<S: Scope, K: ExchangeData+Hash, V: ExchangeData> {
         self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq;
+        hash: H) -> OwnedStream<S, Vec<R>> where S::Timestamp: Eq;
 }
 
 impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for Stream<S, (K, V)> {
@@ -73,7 +74,7 @@ impl<S: Scope, K: ExchangeData+Hash+Eq, V: ExchangeData> Aggregate<S, K, V> for 
         self,
         fold: F,
         emit: E,
-        hash: H) -> Stream<S, R> where S::Timestamp: Eq {
+        hash: H) -> OwnedStream<S, Vec<R>> where S::Timestamp: Eq {
 
         let mut aggregates = HashMap::new();
         let mut vector = Vec::new();

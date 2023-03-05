@@ -47,11 +47,12 @@ use crate::progress::Timestamp;
 use super::EventCore;
 use super::event::EventIteratorCore;
 use crate::Container;
+use crate::dataflow::stream::OwnedStream;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
     /// Replays `self` into the provided scope, as a `Stream<S, D>`.
-    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> StreamCore<S, C> {
+    fn replay_into<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, C> {
         self.replay_core(scope, Some(std::time::Duration::new(0, 0)))
     }
     /// Replays `self` into the provided scope, as a `Stream<S, D>'.
@@ -59,13 +60,13 @@ pub trait Replay<T: Timestamp, C> : Sized {
     /// The `period` argument allows the specification of a re-activation period, where the operator
     /// will re-activate itself every so often. The `None` argument instructs the operator not to
     /// re-activate itself.us
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>;
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> OwnedStream<S, C>;
 }
 
 impl<T: Timestamp, C: Container, I> Replay<T, C> for I
 where I : IntoIterator,
       <I as IntoIterator>::Item: EventIteratorCore<T, C>+'static {
-    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> StreamCore<S, C>{
+    fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> OwnedStream<S, C>{
 
         let mut builder = OperatorBuilder::new("Replay".to_owned(), scope.clone());
 

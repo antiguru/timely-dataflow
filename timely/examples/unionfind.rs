@@ -9,6 +9,7 @@ use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
+use timely::dataflow::stream::{OwnedStream, StreamLike};
 
 fn main() {
 
@@ -50,12 +51,12 @@ fn main() {
     }).unwrap(); // asserts error-free execution;
 }
 
-trait UnionFind {
-    fn union_find(self) -> Self;
+trait UnionFind<G: Scope> {
+    fn union_find(self) -> OwnedStream<G, Vec<(usize, usize)>>;
 }
 
-impl<G: Scope> UnionFind for Stream<G, (usize, usize)> {
-    fn union_find(self) -> Stream<G, (usize, usize)> {
+impl<G: Scope, S: StreamLike<G, Vec<(usize, usize)>>> UnionFind<G> for S {
+    fn union_find(self) -> OwnedStream<G, Vec<(usize, usize)>> {
 
         self.unary(Pipeline, "UnionFind", |_,_| {
 

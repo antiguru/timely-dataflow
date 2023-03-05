@@ -11,13 +11,14 @@ use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 use crate::Container;
+use crate::dataflow::stream::StreamLike;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 
 use super::{EventCore, EventPusherCore};
 
 /// Capture a stream of timestamped data for later replay.
-pub trait Capture<T: Timestamp, D: Container>: Sized {
+pub trait Capture<G: Scope, D: Container>: Sized {
     /// Captures a stream of timestamped data for later replay.
     ///
     /// # Examples
@@ -103,18 +104,18 @@ pub trait Capture<T: Timestamp, D: Container>: Sized {
     ///
     /// assert_eq!(recv0.extract()[0].1, (0..10).collect::<Vec<_>>());
     /// ```
-    fn capture_into<P: EventPusherCore<T, D>+'static>(self, pusher: P);
+    fn capture_into<P: EventPusherCore<G::Timestamp, D>+'static>(self, pusher: P);
 
     /// Captures a stream using Rust's MPSC channels.
-    fn capture(self) -> ::std::sync::mpsc::Receiver<EventCore<T, D>> {
+    fn capture(self) -> ::std::sync::mpsc::Receiver<EventCore<G::Timestamp, D>> {
         let (send, recv) = ::std::sync::mpsc::channel();
         self.capture_into(send);
         recv
     }
 }
 
-impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
-    fn capture_into<P: EventPusherCore<S::Timestamp, D>+'static>(self, mut event_pusher: P) {
+impl<G: Scope, D: Container, S: StreamLike<G, D>> Capture<G, D> for S {
+    fn capture_into<P: EventPusherCore<G::Timestamp, D>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());
         let mut input = PullCounter::new(builder.new_input(self, Pipeline));
@@ -125,7 +126,7 @@ impl<S: Scope, D: Container> Capture<S::Timestamp, D> for StreamCore<S, D> {
 
                 if !started {
                     // discard initial capability.
-                    progress.frontiers[0].update(S::Timestamp::minimum(), -1);
+                    progress.frontiers[0].update(Timestamp::minimum(), -1);
                     started = true;
                 }
                 if !progress.frontiers[0].is_empty() {

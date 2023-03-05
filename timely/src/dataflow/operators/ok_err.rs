@@ -4,6 +4,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::{Scope, Stream};
 use crate::Data;
+use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Extension trait for `Stream`.
 pub trait OkErr<S: Scope, D: Data> {
@@ -32,7 +33,7 @@ pub trait OkErr<S: Scope, D: Data> {
     fn ok_err<D1, D2, L>(
         self,
         logic: L,
-    ) -> (Stream<S, D1>, Stream<S, D2>)
+    ) -> (OwnedStream<S, Vec<D1>>, OwnedStream<S, Vec<D2>>)
 
     where
         D1: Data,
@@ -41,11 +42,11 @@ pub trait OkErr<S: Scope, D: Data> {
     ;
 }
 
-impl<S: Scope, D: Data> OkErr<S, D> for Stream<S, D> {
+impl<G: Scope, D: Data, S: StreamLike<G, Vec<D>>> OkErr<G, D> for S {
     fn ok_err<D1, D2, L>(
         self,
         mut logic: L,
-    ) -> (Stream<S, D1>, Stream<S, D2>)
+    ) -> (OwnedStream<G, Vec<D1>>, OwnedStream<G, Vec<D2>>)
 
     where
         D1: Data,

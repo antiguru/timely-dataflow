@@ -8,12 +8,19 @@ use crate::progress::{Source, Target};
 
 use crate::communication::Push;
 use crate::dataflow::Scope;
-use crate::dataflow::channels::pushers::tee::TeeHelper;
+use crate::dataflow::channels::pushers::tee::{PushOwned, TeeHelper};
 use crate::dataflow::channels::BundleCore;
 use std::fmt::{self, Debug};
 use crate::Container;
+use crate::dataflow::channels::pushers::TeeCore;
 
-// use dataflow::scopes::root::loggers::CHANNELS_Q;
+/// TODO
+pub trait StreamLike<S: Scope, D: Container> {
+    /// TODO
+    fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(self, target: Target, pusher: P, identifier: usize);
+    /// TODO
+    fn scope(&self) -> S;
+}
 
 /// Abstraction of a stream of `D: Container` records timestamped with `S::Timestamp`.
 ///
@@ -29,8 +36,58 @@ pub struct StreamCore<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
+/// TODO
+pub struct OwnedStream<S: Scope, D> {
+    name: Source,
+    scope: S,
+    port: PushOwned<S::Timestamp, D>,
+}
+
+impl<S: Scope, D: Container> OwnedStream<S, D> {
+    /// TODO
+    pub fn new(name: Source, port: PushOwned<S::Timestamp, D>, scope: S) -> Self {
+        Self { name, port, scope }
+    }
+
+    /// TODO
+    pub fn tee(self) -> StreamCore<S, D> {
+        let (target, registrar) = TeeCore::new();
+        self.port.set(target);
+        StreamCore::new(self.name, registrar, self.scope)
+    }
+}
+
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
+
+impl<S: Scope, D: Container> StreamLike<S, D> for StreamCore<S, D> {
+    fn connect_to<P: Push<BundleCore<S::Timestamp, D>> + 'static>(self, target: Target, pusher: P, identifier: usize) {
+        self.connect_to(target, pusher, identifier)
+    }
+
+    fn scope(&self) -> S {
+        self.scope()
+    }
+}
+
+impl<S: Scope, D: Container> StreamLike<S, D> for OwnedStream<S, D> {
+    fn connect_to<P: Push<BundleCore<S::Timestamp, D>> + 'static>(self, target: Target, pusher: P, identifier: usize) {
+        let mut logging = self.scope().logging();
+        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
+            id: identifier,
+            scope_addr: self.scope.addr(),
+            source: (self.name.node, self.name.port),
+            target: (target.node, target.port),
+        }));
+
+        self.scope.add_edge(self.name, target);
+        self.port.set(pusher);
+    }
+
+    fn scope(&self) -> S {
+        self.scope.clone()
+    }
+}
 
 impl<S: Scope, D: Container> StreamCore<S, D> {
     /// Connects the stream to a destination.
