@@ -12,7 +12,7 @@ use crate::progress::Timestamp;
 use crate::Data;
 
 /// Converts to a timely `Stream`.
-pub trait ToStream<T: Timestamp, D: Data> {
+pub trait ToStream<T: Timestamp, D> {
     /// Converts to a timely `Stream`.
     ///
     /// # Examples
@@ -32,7 +32,7 @@ pub trait ToStream<T: Timestamp, D: Data> {
     fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, Vec<D>>;
 }
 
-impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I where I::Item: Data {
+impl<T: Timestamp, I: IntoIterator+'static> ToStream<T, I::Item> for I {
     fn to_stream<S: Scope<Timestamp=T>>(self, scope: &mut S) -> OwnedStream<S, Vec<I::Item>> {
 
         source(scope, "ToStream", |capability, info| {

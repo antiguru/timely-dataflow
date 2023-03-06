@@ -126,3 +126,28 @@ where
             .finish()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::dataflow::channels::pact::Pipeline;
+    use crate::dataflow::operators::{Operator, ToStream};
+
+    #[derive(Debug, Eq, PartialEq)]
+    struct NotClone;
+
+    #[test]
+    fn test_non_clone_stream() {
+        crate::example(|scope| {
+            let _ = vec![NotClone]
+                .to_stream(scope)
+                .sink(Pipeline, "check non-clone", |input| {
+                    while let Some((_time, data)) = input.next() {
+                        for datum in data.iter() {
+                            assert_eq!(datum, &NotClone);
+                        }
+                    }
+                });
+        });
+    }
+
+}
