@@ -1,6 +1,7 @@
 
 //! Methods to construct generic streaming and blocking unary operators.
 
+use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 
 use crate::dataflow::operators::generic::handles::{InputHandleCore, FrontieredInputHandleCore, OutputHandleCore};
@@ -12,7 +13,6 @@ use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::Container;
-use crate::dataflow::channels::pushers::PushOwned;
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Container> {

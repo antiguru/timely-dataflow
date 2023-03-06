@@ -5,13 +5,12 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::dataflow::Scope;
+use crate::dataflow::{Scope, StreamLike};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
 
 use crate::Container;
-use crate::dataflow::stream::StreamLike;
 use crate::progress::ChangeBatch;
 use crate::progress::Timestamp;
 

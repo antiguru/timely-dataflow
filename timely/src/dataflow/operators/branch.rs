@@ -94,7 +94,7 @@ pub trait BranchWhen<G: Scope, C: Container>: Sized {
     fn branch_when(self, condition: impl Fn(&G::Timestamp) -> bool + 'static) -> (OwnedStream<G, C>, OwnedStream<G, C>);
 }
 
-impl<G: Scope, C: Container + Clone, S: StreamLike<G, C>> BranchWhen<G, C> for S {
+impl<G: Scope, C: Container + Data, S: StreamLike<G, C>> BranchWhen<G, C> for S {
     fn branch_when(self, condition: impl Fn(&G::Timestamp) -> bool + 'static) -> (OwnedStream<G, C>, OwnedStream<G, C>) {
         let mut builder = OperatorBuilder::new("Branch".to_owned(), self.scope());
 

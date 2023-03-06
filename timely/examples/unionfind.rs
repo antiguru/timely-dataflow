@@ -9,7 +9,6 @@ use timely::dataflow::*;
 use timely::dataflow::operators::{Input, Exchange, Probe};
 use timely::dataflow::operators::generic::operator::Operator;
 use timely::dataflow::channels::pact::Pipeline;
-use timely::dataflow::stream::{OwnedStream, StreamLike};
 
 fn main() {
 

@@ -10,9 +10,9 @@
 use std::{fmt::{self, Debug}, marker::PhantomData};
 use timely_container::PushPartitioned;
 
-use crate::communication::{Push, Pull, Data};
+use crate::communication::{Push, Pull};
 use crate::communication::allocator::thread::{ThreadPusher, ThreadPuller};
-use crate::Container;
+use crate::{ExchangeData, Container};
 
 use crate::worker::AsWorker;
 use crate::dataflow::channels::pushers::Exchange as ExchangePusher;
@@ -69,9 +69,9 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
 }
 
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
-impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
+impl<T: Timestamp, C, D: ExchangeData, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
 where
-    C: Data + Clone + PushPartitioned<Item=D>,
+    C: ExchangeData + PushPartitioned<Item=D>,
 {
     type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;

@@ -8,11 +8,10 @@ use crate::progress::{Source, Target};
 
 use crate::communication::Push;
 use crate::dataflow::Scope;
-use crate::dataflow::channels::pushers::{TeeHelper, PushOwned};
+use crate::dataflow::channels::pushers::{TeeCore, TeeHelper, PushOwned};
 use crate::dataflow::channels::BundleCore;
 use std::fmt::{self, Debug};
 use crate::Container;
-use crate::dataflow::channels::pushers::TeeCore;
 
 /// Common behavior for all streams. Streams belong to a scope and carry data.
 ///

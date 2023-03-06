@@ -28,7 +28,7 @@ pub trait Partition<G: Scope, D: Data, D2: Data, F: Fn(D) -> (u64, D2)> {
 impl<G, D, D2, F, S> Partition<G, D, D2, F> for S
 where
     G: Scope,
-    D: Data + Clone,
+    D: Data,
     D2: Data,
     F: Fn(D) -> (u64, D2) + 'static,
     S: StreamLike<G, Vec<D>>,
