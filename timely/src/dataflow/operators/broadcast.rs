@@ -1,9 +1,8 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::operators::{Map, Exchange};
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Broadcast records to all workers.
 pub trait Broadcast<G: Scope, D: ExchangeData> {

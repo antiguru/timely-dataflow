@@ -9,18 +9,16 @@ use crate::progress::operate::SharedProgress;
 use crate::progress::frontier::{Antichain, MutableAntichain};
 
 use crate::Container;
-use crate::dataflow::{Scope, StreamCore};
-use crate::dataflow::channels::pushers::TeeCore;
+use crate::dataflow::{Scope, OwnedStream, StreamLike};
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
-use crate::dataflow::channels::pushers::tee::PushOwned;
+use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::operators::capability::Capability;
 use crate::dataflow::operators::generic::handles::{InputHandleCore, new_input_handle, OutputWrapper};
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
 use crate::dataflow::operators::generic::builder_raw::OperatorShape;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 use crate::logging::TimelyLogger as Logger;
 

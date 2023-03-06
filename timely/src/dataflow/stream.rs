@@ -8,17 +8,22 @@ use crate::progress::{Source, Target};
 
 use crate::communication::Push;
 use crate::dataflow::Scope;
-use crate::dataflow::channels::pushers::tee::{PushOwned, TeeHelper};
+use crate::dataflow::channels::pushers::{TeeHelper, PushOwned};
 use crate::dataflow::channels::BundleCore;
 use std::fmt::{self, Debug};
 use crate::Container;
 use crate::dataflow::channels::pushers::TeeCore;
 
-/// TODO
+/// Common behavior for all streams. Streams belong to a scope and carry data.
+///
+/// The main purpose of this is to allow connecting different stream kinds to a pusher.
 pub trait StreamLike<S: Scope, D: Container> {
-    /// TODO
+    /// Connects the stream to a destination.
+    ///
+    /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
+    /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
     fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(self, target: Target, pusher: P, identifier: usize);
-    /// TODO
+    /// The scope containing the stream.
     fn scope(&self) -> S;
 }
 
@@ -36,21 +41,25 @@ pub struct StreamCore<S: Scope, D> {
     ports: TeeHelper<S::Timestamp, D>,
 }
 
-/// TODO
+/// A stream that owns a single pusher.
 pub struct OwnedStream<S: Scope, D> {
+    /// The progress identifier of the stream's data source.
     name: Source,
+    /// The `Scope` containing the stream.
     scope: S,
+    /// The single pusher interested in the stream's output, if any.
     port: PushOwned<S::Timestamp, D>,
 }
 
 impl<S: Scope, D: Container> OwnedStream<S, D> {
-    /// TODO
+    /// Allocates an `OwnedStream` from a supplied `Source` name and rendezvous point within a scope.
     pub fn new(name: Source, port: PushOwned<S::Timestamp, D>, scope: S) -> Self {
         Self { name, port, scope }
     }
 
-    /// TODO
-    pub fn tee(self) -> StreamCore<S, D> {
+    /// Convert the stream into a `StreamCore` that can be cloned. Requires elements to be `Clone`.
+    /// Consumes this stream.
+    pub fn tee(self) -> StreamCore<S, D> where D: Clone {
         let (target, registrar) = TeeCore::new();
         self.port.set(target);
         StreamCore::new(self.name, registrar, self.scope)

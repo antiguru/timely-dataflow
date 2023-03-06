@@ -12,9 +12,9 @@ use crate::progress::Source;
 use crate::{Container, Data};
 use crate::communication::Push;
 use crate::dataflow::{ScopeParent, Scope, OwnedStream};
-use crate::dataflow::channels::pushers::{TeeCore, CounterCore};
+use crate::dataflow::channels::pushers::CounterCore;
 use crate::dataflow::channels::Message;
-use crate::dataflow::channels::pushers::tee::PushOwned;
+use crate::dataflow::channels::pushers::PushOwned;
 
 
 // TODO : This is an exogenous input, but it would be nice to wrap a Subgraph in something
@@ -94,7 +94,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, OwnedStream<Self, D>);
+    fn new_input_core<D: Container+Data>(&mut self) -> (HandleCore<<Self as ScopeParent>::Timestamp, D>, OwnedStream<Self, D>);
 
     /// Create a new stream from a supplied interactive handle.
     ///
@@ -158,7 +158,7 @@ pub trait Input : Scope {
     ///     }
     /// });
     /// ```
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> OwnedStream<Self, D>;
+    fn input_from_core<D: Container+Data>(&mut self, handle: &mut HandleCore<<Self as ScopeParent>::Timestamp, D>) -> OwnedStream<Self, D>;
 }
 
 use crate::order::TotalOrder;
@@ -171,13 +171,13 @@ impl<G: Scope> Input for G where <G as ScopeParent>::Timestamp: TotalOrder {
         self.input_from_core(handle)
     }
 
-    fn new_input_core<D: Container>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, OwnedStream<G, D>) {
+    fn new_input_core<D: Container+Data>(&mut self) -> (HandleCore<<G as ScopeParent>::Timestamp, D>, OwnedStream<G, D>) {
         let mut handle = HandleCore::new();
         let stream = self.input_from_core(&mut handle);
         (handle, stream)
     }
 
-    fn input_from_core<D: Container>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> OwnedStream<G, D> {
+    fn input_from_core<D: Container+Data>(&mut self, handle: &mut HandleCore<<G as ScopeParent>::Timestamp, D>) -> OwnedStream<G, D> {
         let (output, registrar) = PushOwned::<<G as ScopeParent>::Timestamp, D>::new();
         let counter = CounterCore::new(output);
         let produced = counter.produced().clone();
@@ -247,7 +247,7 @@ impl<T:Timestamp> Operate<T> for Operator<T> {
 
 /// A handle to an input `Stream`, used to introduce data to a timely dataflow computation.
 #[derive(Debug)]
-pub struct HandleCore<T: Timestamp, C: Container> {
+pub struct HandleCore<T: Timestamp, C: Container+Data> {
     activate: Vec<Activator>,
     progress: Vec<Rc<RefCell<ChangeBatch<T>>>>,
     pushers: Vec<CounterCore<T, C, PushOwned<T, C>>>,
@@ -259,7 +259,7 @@ pub struct HandleCore<T: Timestamp, C: Container> {
 /// A handle specialized to vector-based containers.
 pub type Handle<T, D> = HandleCore<T, Vec<D>>;
 
-impl<T: Timestamp, D: Container> HandleCore<T, D> {
+impl<T: Timestamp, D: Container+Data> HandleCore<T, D> {
     /// Allocates a new input handle, from which one can create timely streams.
     ///
     /// # Examples
@@ -507,7 +507,7 @@ impl<T: Timestamp, D: Data> Default for Handle<T, D> {
     }
 }
 
-impl<T:Timestamp, C: Container> Drop for HandleCore<T, C> {
+impl<T:Timestamp, C: Container+Data> Drop for HandleCore<T, C> {
     fn drop(&mut self) {
         self.close_epoch();
     }

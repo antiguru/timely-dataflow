@@ -1,7 +1,7 @@
 //! A `Push` implementor with a list of `Box<Push>` to forward pushes to.
 
 use std::cell::RefCell;
-use std::fmt::{self, Debug, Formatter};
+use std::fmt::{self, Debug};
 use std::rc::Rc;
 
 use crate::dataflow::channels::{BundleCore, Message};
@@ -10,39 +10,6 @@ use crate::communication::Push;
 use crate::{Container, Data};
 
 type PushList<T, D> = Rc<RefCell<Vec<Box<dyn Push<BundleCore<T, D>>>>>>;
-/// TODO
-pub struct PushOwned<T, D>(Rc<RefCell<Option<Box<dyn Push<BundleCore<T, D>>>>>>);
-
-impl<T, D> PushOwned<T, D> {
-    /// TODO
-    pub fn new() -> (Self, Self) {
-        let zelf = Self(Rc::new(RefCell::new(None)));
-        (zelf.clone(), zelf)
-    }
-
-    /// TODO
-    pub fn set<P: Push<BundleCore<T, D>> + 'static>(&self, pusher: P) {
-        *self.0.borrow_mut() = Some(Box::new(pusher));
-    }
-}
-
-impl<T, D> Default for PushOwned<T, D> {
-    fn default() -> Self {
-        Self(Rc::new(RefCell::new(None)))
-    }
-}
-
-impl<T, D> Debug for PushOwned<T, D> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("PushOwned").finish_non_exhaustive()
-    }
-}
-
-impl<T, D> Clone for PushOwned<T, D> {
-    fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
-    }
-}
 
 /// Wraps a shared list of `Box<Push>` to forward pushes to. Owned by `Stream`.
 pub struct TeeCore<T, D> {
@@ -53,18 +20,7 @@ pub struct TeeCore<T, D> {
 /// [TeeCore] specialized to `Vec`-based container.
 pub type Tee<T, D> = TeeCore<T, Vec<D>>;
 
-impl<T: Data, D: Container> Push<BundleCore<T, D>> for PushOwned<T, D> {
-    #[inline]
-    fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
-        let mut pusher = self.0.borrow_mut();
-        if let Some(pusher) = pusher.as_mut() {
-            pusher.push(message);
-        }
-    }
-}
-
-
-impl<T: Data, D: Container> Push<BundleCore<T, D>> for TeeCore<T, D> {
+impl<T: Data, D: Container+Clone> Push<BundleCore<T, D>> for TeeCore<T, D> {
     #[inline]
     fn push(&mut self, message: &mut Option<BundleCore<T, D>>) {
         let mut pushers = self.shared.borrow_mut();

@@ -38,7 +38,7 @@
 //! allowing the replay to occur in a timely dataflow computation with more or fewer workers
 //! than that in which the stream was captured.
 
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, OwnedStream};
 use crate::dataflow::channels::pushers::CounterCore as PushCounter;
 use crate::dataflow::channels::pushers::buffer::BufferCore as PushBuffer;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -47,7 +47,6 @@ use crate::progress::Timestamp;
 use super::EventCore;
 use super::event::EventIteratorCore;
 use crate::Container;
-use crate::dataflow::stream::OwnedStream;
 
 /// Replay a capture stream into a scope with the same timestamp.
 pub trait Replay<T: Timestamp, C> : Sized {
@@ -63,7 +62,7 @@ pub trait Replay<T: Timestamp, C> : Sized {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> OwnedStream<S, C>;
 }
 
-impl<T: Timestamp, C: Container, I> Replay<T, C> for I
+impl<T: Timestamp, C: Container+Clone, I> Replay<T, C> for I
 where I : IntoIterator,
       <I as IntoIterator>::Item: EventIteratorCore<T, C>+'static {
     fn replay_core<S: Scope<Timestamp=T>>(self, scope: &mut S, period: Option<std::time::Duration>) -> OwnedStream<S, C>{

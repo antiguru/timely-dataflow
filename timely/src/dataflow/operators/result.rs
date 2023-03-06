@@ -2,8 +2,7 @@
 
 use crate::Data;
 use crate::dataflow::operators::Map;
-use crate::dataflow::{Scope, Stream};
-use crate::dataflow::stream::{OwnedStream, StreamLike};
+use crate::dataflow::{Scope, StreamLike, OwnedStream};
 
 /// Extension trait for `Stream`.
 pub trait ResultStream<G: Scope, T: Data, E: Data> {

@@ -1,20 +1,18 @@
 
 //! Methods to construct generic streaming and blocking unary operators.
 
-use timely_communication::allocator::zero_copy::stream::Stream;
 use crate::dataflow::channels::pact::ParallelizationContractCore;
 
 use crate::dataflow::operators::generic::handles::{InputHandleCore, FrontieredInputHandleCore, OutputHandleCore};
 use crate::dataflow::operators::capability::Capability;
 
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, OwnedStream, StreamLike};
 
 use super::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OperatorInfo;
 use crate::dataflow::operators::generic::notificator::{Notificator, FrontierNotificator};
 use crate::Container;
-use crate::dataflow::channels::pushers::tee::PushOwned;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
+use crate::dataflow::channels::pushers::PushOwned;
 
 /// Methods to construct generic streaming and blocking operators.
 pub trait Operator<G: Scope, D1: Container> {
@@ -152,7 +150,7 @@ pub trait Operator<G: Scope, D1: Container> {
     ///    let (mut in1, mut in2) = worker.dataflow::<usize,_,_>(|scope| {
     ///        let (in1_handle, in1) = scope.new_input();
     ///        let (in2_handle, in2) = scope.new_input();
-    ///        in1.binary_frontier(&in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
+    ///        in1.binary_frontier(in2, Pipeline, Pipeline, "example", |mut _default_cap, _info| {
     ///            let mut notificator = FrontierNotificator::new();
     ///            let mut stash = HashMap::new();
     ///            let mut vector1 = Vec::new();
@@ -217,7 +215,7 @@ pub trait Operator<G: Scope, D1: Container> {
     ///
     ///        let mut vector1 = Vec::new();
     ///        let mut vector2 = Vec::new();
-    ///        in1.binary_notify(&in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
+    ///        in1.binary_notify(in2, Pipeline, Pipeline, "example", None, move |input1, input2, output, notificator| {
     ///            input1.for_each(|time, data| {
     ///                data.swap(&mut vector1);
     ///                output.session(&time).give_vec(&mut vector1);
@@ -269,7 +267,7 @@ pub trait Operator<G: Scope, D1: Container> {
     /// timely::example(|scope| {
     ///     let stream2 = (0u64..10).to_stream(scope);
     ///     (0u64..10).to_stream(scope)
-    ///         .binary(&stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
+    ///         .binary(stream2, Pipeline, Pipeline, "example", |default_cap, _info| {
     ///             let mut cap = Some(default_cap.delayed(&12));
     ///             let mut vector1 = Vec::new();
     ///             let mut vector2 = Vec::new();

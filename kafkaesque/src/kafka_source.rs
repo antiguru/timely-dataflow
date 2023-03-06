@@ -5,7 +5,7 @@ use timely::dataflow::operators::generic::OutputHandle;
 
 use rdkafka::Message;
 use rdkafka::consumer::{ConsumerContext, BaseConsumer};
-use timely::dataflow::channels::pushers::tee::PushOwned;
+use timely::dataflow::channels::pushers::PushOwned;
 use timely::dataflow::stream::OwnedStream;
 
 /// Constructs a stream of data from a Kafka consumer.

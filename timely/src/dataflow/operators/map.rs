@@ -1,10 +1,9 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
 use crate::Data;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Extension trait for `Stream`.
 pub trait Map<S: Scope, D: Data> {

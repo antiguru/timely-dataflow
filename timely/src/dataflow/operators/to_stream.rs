@@ -7,10 +7,9 @@ use crate::Container;
 
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::CapabilitySet;
-use crate::dataflow::{StreamCore, Scope, Stream};
+use crate::dataflow::{OwnedStream, Scope};
 use crate::progress::Timestamp;
 use crate::Data;
-use crate::dataflow::stream::OwnedStream;
 
 /// Converts to a timely `Stream`.
 pub trait ToStream<T: Timestamp, D: Data> {

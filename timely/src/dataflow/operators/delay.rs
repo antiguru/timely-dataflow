@@ -5,9 +5,8 @@ use std::collections::HashMap;
 use crate::Data;
 use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::operators::generic::operator::Operator;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Methods to advance the timestamps of records or batches of records.
 pub trait Delay<G: Scope, D: Data> {

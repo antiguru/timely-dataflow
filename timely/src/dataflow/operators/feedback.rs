@@ -6,14 +6,12 @@ use crate::progress::{Timestamp, PathSummary};
 use crate::progress::frontier::Antichain;
 use crate::order::Product;
 
-use crate::dataflow::channels::pushers::TeeCore;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{StreamCore, Scope};
-use crate::dataflow::channels::pushers::tee::PushOwned;
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
+use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
 use crate::dataflow::operators::generic::OutputWrapper;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Creates a `Stream` and a `Handle` to later bind the source of that `Stream`.
 pub trait Feedback<G: Scope> {
@@ -32,7 +30,7 @@ pub trait Feedback<G: Scope> {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
+    ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
@@ -55,7 +53,7 @@ pub trait Feedback<G: Scope> {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback_core::<Vec<_>>(1);
     ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
+    ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
@@ -82,7 +80,7 @@ pub trait LoopVariable<'a, G: Scope, T: Timestamp> {
     ///     scope.iterative::<usize,_,_>(|inner| {
     ///         let (handle, cycle) = inner.loop_variable(1);
     ///         (0..10).to_stream(inner)
-    ///                .concat(&cycle)
+    ///                .concat(cycle)
     ///                .inspect(|x| println!("seen: {:?}", x))
     ///                .branch_when(|t| t.inner < 100).1
     ///                .connect_loop(handle);
@@ -125,7 +123,7 @@ pub trait ConnectLoop<G: Scope, D: Container> {
     ///     // circulate 0..10 for 100 iterations.
     ///     let (handle, cycle) = scope.feedback(1);
     ///     (0..10).to_stream(scope)
-    ///            .concat(&cycle)
+    ///            .concat(cycle)
     ///            .inspect(|x| println!("seen: {:?}", x))
     ///            .branch_when(|t| t < &100).1
     ///            .connect_loop(handle);
@@ -134,7 +132,7 @@ pub trait ConnectLoop<G: Scope, D: Container> {
     fn connect_loop(self, _: HandleCore<G, D>);
 }
 
-impl<G: Scope, D: Container, S: StreamLike<G, D>> ConnectLoop<G, D> for S {
+impl<G: Scope, D: Container+Clone, S: StreamLike<G, D>> ConnectLoop<G, D> for S {
     fn connect_loop(self, helper: HandleCore<G, D>) {
 
         let mut builder = helper.builder;

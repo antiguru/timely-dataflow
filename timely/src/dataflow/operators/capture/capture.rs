@@ -5,7 +5,7 @@
 //! and there are several default implementations, including a linked-list, Rust's MPSC
 //! queue, and a binary serializer wrapping any `W: Write`.
 
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::Scope;
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::channels::pullers::Counter as PullCounter;
 use crate::dataflow::operators::generic::builder_raw::OperatorBuilder;
@@ -114,7 +114,7 @@ pub trait Capture<G: Scope, D: Container>: Sized {
     }
 }
 
-impl<G: Scope, D: Container, S: StreamLike<G, D>> Capture<G, D> for S {
+impl<G: Scope, D: Container + Clone, S: StreamLike<G, D>> Capture<G, D> for S {
     fn capture_into<P: EventPusherCore<G::Timestamp, D>+'static>(self, mut event_pusher: P) {
 
         let mut builder = OperatorBuilder::new("Capture".to_owned(), self.scope());

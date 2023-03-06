@@ -5,9 +5,8 @@ use timely_container::columnation::{Columnation, TimelyStack};
 use crate::Container;
 use crate::Data;
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Scope, StreamCore};
+use crate::dataflow::{Scope, OwnedStream, StreamLike};
 use crate::dataflow::operators::generic::Operator;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Methods to inspect records and batches of records on a stream.
 pub trait Inspect<G: Scope, C: Container>: InspectCore<G, C> + Sized {
@@ -135,7 +134,7 @@ pub trait InspectCore<G: Scope, C: Container> {
     fn inspect_container<F>(self, func: F) -> OwnedStream<G, C> where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static;
 }
 
-impl<G: Scope, C: Container, S: StreamLike<G, C>> InspectCore<G, C> for S {
+impl<G: Scope, C: Container+Data, S: StreamLike<G, C>> InspectCore<G, C> for S {
 
     fn inspect_container<F>(self, mut func: F) -> OwnedStream<G, C>
         where F: FnMut(Result<(&G::Timestamp, &C), &[G::Timestamp]>)+'static

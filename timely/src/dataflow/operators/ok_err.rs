@@ -2,9 +2,8 @@
 
 use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::builder_rc::OperatorBuilder;
-use crate::dataflow::{Scope, Stream};
+use crate::dataflow::{Scope, OwnedStream, StreamLike};
 use crate::Data;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Extension trait for `Stream`.
 pub trait OkErr<S: Scope, D: Data> {

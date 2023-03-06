@@ -33,8 +33,8 @@ pub trait ParallelizationContractCore<T, D> {
 
 /// A `ParallelizationContractCore` specialized for `Vec` containers
 /// TODO: Use trait aliases once stable.
-pub trait ParallelizationContract<T, D: Clone>: ParallelizationContractCore<T, Vec<D>> { }
-impl<T, D: Clone, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
+pub trait ParallelizationContract<T, D>: ParallelizationContractCore<T, Vec<D>> { }
+impl<T, D, P: ParallelizationContractCore<T, Vec<D>>> ParallelizationContract<T, D> for P { }
 
 /// A direct connection
 #[derive(Debug)]
@@ -71,7 +71,7 @@ impl<C, D, F: FnMut(&D)->u64+'static> ExchangeCore<C, D, F> {
 // Exchange uses a `Box<Pushable>` because it cannot know what type of pushable will return from the allocator.
 impl<T: Timestamp, C, D: Data+Clone, F: FnMut(&D)->u64+'static> ParallelizationContractCore<T, C> for ExchangeCore<C, D, F>
 where
-    C: Data + Container + PushPartitioned<Item=D>,
+    C: Data + Clone + PushPartitioned<Item=D>,
 {
     type Pusher = ExchangePusher<T, C, D, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, F>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;

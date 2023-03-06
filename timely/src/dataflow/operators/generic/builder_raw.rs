@@ -14,11 +14,10 @@ use crate::progress::{Source, Target};
 use crate::progress::{Timestamp, Operate, operate::SharedProgress, Antichain};
 
 use crate::Container;
-use crate::dataflow::{StreamCore, Scope};
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::channels::pact::ParallelizationContractCore;
-use crate::dataflow::channels::pushers::tee::PushOwned;
+use crate::dataflow::channels::pushers::PushOwned;
 use crate::dataflow::operators::generic::operator_info::OperatorInfo;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Contains type-free information about the operator properties.
 #[derive(Debug)]
@@ -141,8 +140,7 @@ impl<G: Scope> OperatorBuilder<G> {
     /// Adds a new output to a generic operator builder, returning the `Push` implementor to use.
     pub fn new_output_connection<D: Container>(&mut self, connection: Vec<Antichain<<G::Timestamp as Timestamp>::Summary>>) -> (PushOwned<G::Timestamp, D>, OwnedStream<G, D>) {
 
-        let target = PushOwned::default();
-        let registrar = target.clone();
+        let (target, registrar) = PushOwned::new();
         let source = Source::new(self.index, self.shape.outputs);
         let stream = OwnedStream::new(source, registrar, self.scope.clone());
 

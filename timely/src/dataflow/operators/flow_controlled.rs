@@ -5,8 +5,7 @@ use crate::order::{PartialOrder, TotalOrder};
 use crate::progress::timestamp::Timestamp;
 use crate::dataflow::operators::generic::operator::source;
 use crate::dataflow::operators::probe::Handle;
-use crate::dataflow::{Stream, Scope};
-use crate::dataflow::stream::OwnedStream;
+use crate::dataflow::{OwnedStream, Scope};
 
 /// Output of the input reading function for iterator_source.
 pub struct IteratorSourceInput<T: Clone, D: Data, DI: IntoIterator<Item=D>, I: IntoIterator<Item=(T, DI)>> {
