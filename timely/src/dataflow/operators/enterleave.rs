@@ -28,13 +28,13 @@ use crate::progress::{Source, Target};
 use crate::order::Product;
 use crate::{Container, Data};
 use crate::communication::Push;
-use crate::dataflow::channels::pushers::{CounterCore, TeeCore};
+use crate::dataflow::channels::pushers::{CounterCore, PushOwned};
 use crate::dataflow::channels::{BundleCore, Message};
 
 use crate::worker::AsWorker;
-use crate::dataflow::{StreamCore, Scope};
-use crate::dataflow::channels::pushers::PushOwned;
+use crate::dataflow::{OwnedStream, StreamLike, Scope};
 use crate::dataflow::scopes::{Child, ScopeParent};
+use crate::dataflow::scopes::child::Iterative;
 use crate::dataflow::operators::delay::Delay;
 
 /// Extension trait to move a `Stream` into a child of its current `Scope`.
@@ -53,11 +53,8 @@ pub trait Enter<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container> {
     ///     });
     /// });
     /// ```
-    fn enter<'a>(self, _: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C>;
+    fn enter<'a>(self, _: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C>;
 }
-
-use crate::dataflow::scopes::child::Iterative;
-use crate::dataflow::stream::{OwnedStream, StreamLike};
 
 /// Extension trait to move a `Stream` into a child of its current `Scope` setting the timestamp for each element.
 pub trait EnterAt<G: Scope, T: Timestamp, D: Data> {
@@ -86,11 +83,11 @@ impl<G: Scope, T: Timestamp, D: Data, E: Enter<G, Product<<G as ScopeParent>::Ti
 }
 
 impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container+Data, S: StreamLike<G, C>> Enter<G, T, C> for S {
-    fn enter<'a>(self, scope: &Child<'a, G, T>) -> StreamCore<Child<'a, G, T>, C> {
+    fn enter<'a>(self, scope: &Child<'a, G, T>) -> OwnedStream<Child<'a, G, T>, C> {
 
         use crate::scheduling::Scheduler;
 
-        let (targets, registrar) = TeeCore::<T, C>::new();
+        let (targets, registrar) = PushOwned::<T, C>::new();
         let ingress = IngressNub {
             targets: CounterCore::new(targets),
             phantom: PhantomData,
@@ -108,7 +105,7 @@ impl<G: Scope, T: Timestamp+Refines<G::Timestamp>, C: Container+Data, S: StreamL
             self.connect_to(input, ingress, channel_id);
         }
 
-        StreamCore::new(
+        OwnedStream::new(
             Source::new(0, input.port),
             registrar,
             scope.clone(),
@@ -169,7 +166,7 @@ where
 
 
 struct IngressNub<TOuter: Timestamp, TInner: Timestamp+Refines<TOuter>, TData: Container+Data> {
-    targets: CounterCore<TInner, TData, TeeCore<TInner, TData>>,
+    targets: CounterCore<TInner, TData, PushOwned<TInner, TData>>,
     phantom: ::std::marker::PhantomData<TOuter>,
     activator: crate::scheduling::Activator,
     active: bool,

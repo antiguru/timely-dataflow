@@ -16,7 +16,7 @@ pub trait Concat<G: Scope, D: Container, S: StreamLike<G, D>> {
     /// timely::example(|scope| {
     ///
     ///     let stream = (0..10).to_stream(scope).tee();
-    ///     stream.clone().concat(stream)
+    ///     stream.concat(&stream)
     ///           .inspect(|x| println!("seen: {:?}", x));
     /// });
     /// ```

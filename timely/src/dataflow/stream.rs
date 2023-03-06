@@ -69,13 +69,22 @@ impl<S: Scope, D: Container> OwnedStream<S, D> {
 /// A stream batching data in vectors.
 pub type Stream<S, D> = StreamCore<S, Vec<D>>;
 
-impl<S: Scope, D: Container> StreamLike<S, D> for StreamCore<S, D> {
+impl<S: Scope, D: Container> StreamLike<S, D> for &StreamCore<S, D> {
     fn connect_to<P: Push<BundleCore<S::Timestamp, D>> + 'static>(self, target: Target, pusher: P, identifier: usize) {
-        self.connect_to(target, pusher, identifier)
+        let mut logging = self.scope().logging();
+        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
+            id: identifier,
+            scope_addr: self.scope.addr(),
+            source: (self.name.node, self.name.port),
+            target: (target.node, target.port),
+        }));
+
+        self.scope.add_edge(self.name, target);
+        self.ports.add_pusher(pusher);
     }
 
     fn scope(&self) -> S {
-        self.scope()
+        self.scope.clone()
     }
 }
 
@@ -99,31 +108,12 @@ impl<S: Scope, D: Container> StreamLike<S, D> for OwnedStream<S, D> {
 }
 
 impl<S: Scope, D: Container> StreamCore<S, D> {
-    /// Connects the stream to a destination.
-    ///
-    /// The destination is described both by a `Target`, for progress tracking information, and a `P: Push` where the
-    /// records should actually be sent. The identifier is unique to the edge and is used only for logging purposes.
-    pub fn connect_to<P: Push<BundleCore<S::Timestamp, D>>+'static>(self, target: Target, pusher: P, identifier: usize) {
-
-        let mut logging = self.scope().logging();
-        logging.as_mut().map(|l| l.log(crate::logging::ChannelsEvent {
-            id: identifier,
-            scope_addr: self.scope.addr(),
-            source: (self.name.node, self.name.port),
-            target: (target.node, target.port),
-        }));
-
-        self.scope.add_edge(self.name, target);
-        self.ports.add_pusher(pusher);
-    }
     /// Allocates a `Stream` from a supplied `Source` name and rendezvous point.
     pub fn new(source: Source, output: TeeHelper<S::Timestamp, D>, scope: S) -> Self {
         Self { name: source, ports: output, scope }
     }
     /// The name of the stream's source operator.
     pub fn name(&self) -> &Source { &self.name }
-    /// The scope immediately containing the stream.
-    pub fn scope(&self) -> S { self.scope.clone() }
 }
 
 impl<S, D> Debug for StreamCore<S, D>

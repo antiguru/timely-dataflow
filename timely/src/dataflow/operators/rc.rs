@@ -51,7 +51,6 @@ mod test {
     fn test_shared() {
         let output = crate::example(|scope| {
             let shared = vec![Ok(0), Err(())].to_stream(scope).shared().tee();
-            let shared2 = shared.clone();
             scope
                 .concatenate([
                     shared.unary(Pipeline, "read shared 1", |_, _| {
@@ -63,7 +62,7 @@ mod test {
                             });
                         }
                     }),
-                    shared2.unary(Pipeline, "read shared 2", |_, _| {
+                    shared.unary(Pipeline, "read shared 2", |_, _| {
                         let mut container = Default::default();
                         move |input, output| {
                             input.for_each(|time, data| {
