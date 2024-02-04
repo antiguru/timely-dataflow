@@ -296,8 +296,6 @@ mod container {
     use crate::columnation::{Columnation, TimelyStack};
 
     impl<T: Columnation + 'static> Container for TimelyStack<T> {
-        type Item = T;
-
         fn len(&self) -> usize {
             self.local.len()
         }
@@ -306,19 +304,17 @@ mod container {
             self.local.is_empty()
         }
 
-        fn capacity(&self) -> usize {
-           self.local.capacity()
-        }
-
         fn clear(&mut self) {
             TimelyStack::clear(self)
         }
     }
 
     impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
+        type ReadItem<'a> = &'a T where T: 'a;
+
         fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
         where
-            I: FnMut(&Self::Item) -> usize,
+            for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
             F: FnMut(usize, &mut Self),
         {
             fn ensure_capacity<E: Columnation>(this: &mut TimelyStack<E>) {

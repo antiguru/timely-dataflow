@@ -17,9 +17,6 @@ pub mod columnation;
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
 /// TODO: Don't require `Container: Clone`
 pub trait Container: Default + Clone + 'static {
-    /// The type of elements this container holds.
-    type Item;
-
     /// The number of elements in this container
     ///
     /// The length of a container must be consistent between sending and receiving it.
@@ -32,27 +29,18 @@ pub trait Container: Default + Clone + 'static {
         self.len() == 0
     }
 
-    /// The capacity of the underlying container
-    fn capacity(&self) -> usize;
-
     /// Remove all contents from `self` while retaining allocated memory.
     /// After calling `clear`, `is_empty` must return `true` and `len` 0.
     fn clear(&mut self);
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {
-    type Item = T;
-
     fn len(&self) -> usize {
         Vec::len(self)
     }
 
     fn is_empty(&self) -> bool {
         Vec::is_empty(self)
-    }
-
-    fn capacity(&self) -> usize {
-        Vec::capacity(self)
     }
 
     fn clear(&mut self) { Vec::clear(self) }
@@ -64,18 +52,12 @@ mod rc {
     use crate::Container;
 
     impl<T: Container> Container for Rc<T> {
-        type Item = T::Item;
-
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
 
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn capacity(&self) -> usize {
-            std::ops::Deref::deref(self).capacity()
         }
 
         fn clear(&mut self) {
@@ -95,18 +77,12 @@ mod arc {
     use crate::Container;
 
     impl<T: Container> Container for Arc<T> {
-        type Item = T::Item;
-
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
 
         fn is_empty(&self) -> bool {
             std::ops::Deref::deref(self).is_empty()
-        }
-
-        fn capacity(&self) -> usize {
-            std::ops::Deref::deref(self).capacity()
         }
 
         fn clear(&mut self) {
@@ -122,20 +98,25 @@ mod arc {
 
 /// A container that can partition itself into pieces.
 pub trait PushPartitioned: Container {
+    /// The type of elements this container holds.
+    type ReadItem<'a> where Self: 'a;
+
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
     /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
     where
-        I: FnMut(&Self::Item) -> usize,
+        for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
         F: FnMut(usize, &mut Self);
 }
 
 impl<T: Clone + 'static> PushPartitioned for Vec<T> {
+    type ReadItem<'a> = &'a T where Self: 'a;
+
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
-        I: FnMut(&Self::Item) -> usize,
+        for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
         F: FnMut(usize, &mut Self),
     {
         fn ensure_capacity<E>(this: &mut Vec<E>) {
