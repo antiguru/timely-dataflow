@@ -124,6 +124,18 @@ impl<T: Columnation> TimelyStack<T> {
         });
         (length, capacity)
     }
+
+    /// The length in items.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.local.len()
+    }
+
+    /// The capacity of the local vector.
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.local.capacity()
+    }
 }
 
 impl<A: Columnation, B: Columnation> TimelyStack<(A, B)> {
