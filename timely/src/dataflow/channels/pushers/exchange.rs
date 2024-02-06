@@ -9,7 +9,7 @@ use crate::dataflow::channels::{BundleCore, Message};
 /// Distributes records among target pushees according to a distribution function.
 pub struct Exchange<T, C: PushPartitioned, P: Push<BundleCore<T, C>>, H>
 where
-    for<'a> H: FnMut(C::ReadItem<'a>) -> u64
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     pushers: Vec<P>,
     buffers: Vec<C>,
@@ -19,7 +19,7 @@ where
 
 impl<T: Clone, C: PushPartitioned, P: Push<BundleCore<T, C>>, H>  Exchange<T, C, P, H>
 where
-    for<'a> H: FnMut(C::ReadItem<'a>) -> u64
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     /// Allocates a new `Exchange` from a supplied set of pushers and a distribution function.
     pub fn new(pushers: Vec<P>, key: H) -> Exchange<T, C, P, H> {
@@ -47,7 +47,7 @@ where
 impl<T: Eq+Data, C: Container, P: Push<BundleCore<T, C>>, H, > Push<BundleCore<T, C>> for Exchange<T, C, P, H>
 where
     C: PushPartitioned,
-    for<'a> H: FnMut(C::ReadItem<'a>) -> u64
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     #[inline(never)]
     fn push(&mut self, message: &mut Option<BundleCore<T, C>>) {

@@ -18,6 +18,12 @@ mod flatcontainer;
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
 /// TODO: Don't require `Container: Clone`
 pub trait Container: Default + Clone + 'static {
+    /// The type of elements this container holds.
+    type ItemRef<'a> where Self: 'a;
+
+    /// The type of elements this container holds.
+    type Item<'a> where Self: 'a;
+
     /// The number of elements in this container
     ///
     /// The length of a container must be consistent between sending and receiving it.
@@ -33,9 +39,38 @@ pub trait Container: Default + Clone + 'static {
     /// Remove all contents from `self` while retaining allocated memory.
     /// After calling `clear`, `is_empty` must return `true` and `len` 0.
     fn clear(&mut self);
+
+    /// TODO
+    type Iter<'a>: IntoIterator<Item=Self::ItemRef<'a>>;
+    /// TODO
+    fn iter<'a>(&'a self) -> Self::Iter<'a>;
+
+    /// TODO
+    type IntoIter<'a>: IntoIterator<Item=Self::Item<'a>>;
+    /// TODO
+    fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a>;
+}
+
+/// TODO
+pub trait PushInto<C> {
+    /// TODO
+    fn push_into(self, target: &mut C);
+}
+
+/// TODO
+pub trait PushContainer {
+    /// TODO
+    fn capacity(&self) -> usize;
+    /// TODO
+    fn preferred_capacity() -> usize;
+    /// TODO
+    fn reserve(&mut self, additional: usize);
 }
 
 impl<T: Clone + 'static> Container for Vec<T> {
+    type ItemRef<'a> = &'a T where T: 'a;
+    type Item<'a> = T where T: 'a;
+
     fn len(&self) -> usize {
         Vec::len(self)
     }
@@ -45,14 +80,50 @@ impl<T: Clone + 'static> Container for Vec<T> {
     }
 
     fn clear(&mut self) { Vec::clear(self) }
+
+    type Iter<'a> = std::slice::Iter<'a, T>;
+
+    fn iter<'a>(&'a self) -> Self::Iter<'a> {
+        self.as_slice().iter()
+    }
+
+    type IntoIter<'a> = <Vec<T> as IntoIterator>::IntoIter;
+
+    fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a> {
+        IntoIterator::into_iter(std::mem::take(self))
+    }
+}
+
+impl<T> PushContainer for Vec<T> {
+    fn capacity(&self) -> usize {
+        self.capacity()
+    }
+
+    fn preferred_capacity() -> usize {
+        buffer::default_capacity::<T>()
+    }
+
+    fn reserve(&mut self, additional: usize) {
+        self.reserve(additional);
+    }
+}
+
+impl<T> PushInto<Vec<T>> for T {
+    fn push_into(self, target: &mut Vec<T>) {
+        target.push(self)
+    }
 }
 
 mod rc {
+    use std::ops::Deref;
     use std::rc::Rc;
 
     use crate::Container;
 
     impl<T: Container> Container for Rc<T> {
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
+
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
@@ -69,15 +140,31 @@ mod rc {
                 *self = Self::default();
             }
         }
+
+        type Iter<'a> = T::Iter<'a>;
+
+        fn iter(&self) -> Self::Iter<'_> {
+            self.deref().iter()
+        }
+
+        type IntoIter<'a> = T::Iter<'a>;
+
+        fn into_iter(&mut self) -> Self::IntoIter<'_> {
+            self.iter()
+        }
     }
 }
 
 mod arc {
+    use std::ops::Deref;
     use std::sync::Arc;
 
     use crate::Container;
 
     impl<T: Container> Container for Arc<T> {
+        type ItemRef<'a> = T::ItemRef<'a> where Self: 'a;
+        type Item<'a> = T::ItemRef<'a> where Self: 'a;
+
         fn len(&self) -> usize {
             std::ops::Deref::deref(self).len()
         }
@@ -94,48 +181,56 @@ mod arc {
                 *self = Self::default();
             }
         }
+
+        type Iter<'a> = T::Iter<'a>;
+
+        fn iter(&self) -> Self::Iter<'_> {
+            self.deref().iter()
+        }
+
+        type IntoIter<'a> = T::Iter<'a>;
+
+        fn into_iter(&mut self) -> Self::IntoIter<'_> {
+            self.iter()
+        }
     }
 }
 
 /// A container that can partition itself into pieces.
-pub trait PushPartitioned: Container {
-    /// The type of elements this container holds.
-    type ReadItem<'a> where Self: 'a;
-
+pub trait PushPartitioned: Container + PushContainer {
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
     /// append an element to. Call `flush` with an index and a buffer to send the data downstream.
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], index: I, flush: F)
     where
-        for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
+        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: Clone + 'static> PushPartitioned for Vec<T> {
-    type ReadItem<'a> = &'a T where Self: 'a;
-
+impl<T: Container + PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>: PushInto<T> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
-        for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
+        for<'a> I: FnMut(&Self::Item<'a>) -> usize,
         F: FnMut(usize, &mut Self),
     {
-        fn ensure_capacity<E>(this: &mut Vec<E>) {
+        let ensure_capacity = |this: &mut Self| {
             let capacity = this.capacity();
-            let desired_capacity = buffer::default_capacity::<E>();
+            let desired_capacity = Self::preferred_capacity();
             if capacity < desired_capacity {
                 this.reserve(desired_capacity - capacity);
             }
-        }
+        };
 
-        for datum in self.drain(..) {
+        for datum in self.into_iter() {
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
-            buffers[index].push(datum);
+            datum.push_into(&mut buffers[index]);
             if buffers[index].len() == buffers[index].capacity() {
                 flush(index, &mut buffers[index]);
             }
         }
+        self.clear();
     }
 }
 

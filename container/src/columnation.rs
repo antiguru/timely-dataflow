@@ -303,11 +303,15 @@ mod serde {
 }
 
 mod container {
-    use crate::{Container, PushPartitioned};
+    use std::ops::Deref;
+    use crate::Container;
 
     use crate::columnation::{Columnation, TimelyStack};
 
     impl<T: Columnation + 'static> Container for TimelyStack<T> {
+        type ItemRef<'a> = &'a T where Self: 'a;
+        type Item<'a> = &'a T where Self: 'a;
+
         fn len(&self) -> usize {
             self.local.len()
         }
@@ -319,33 +323,17 @@ mod container {
         fn clear(&mut self) {
             TimelyStack::clear(self)
         }
-    }
 
-    impl<T: Columnation + 'static> PushPartitioned for TimelyStack<T> {
-        type ReadItem<'a> = &'a T where T: 'a;
+        type Iter<'a> = std::slice::Iter<'a, T>;
 
-        fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
-        where
-            for<'a> I: FnMut(Self::ReadItem<'a>) -> usize,
-            F: FnMut(usize, &mut Self),
-        {
-            fn ensure_capacity<E: Columnation>(this: &mut TimelyStack<E>) {
-                let capacity = this.local.capacity();
-                let desired_capacity = crate::buffer::default_capacity::<E>();
-                if capacity < desired_capacity {
-                    this.local.reserve(desired_capacity - capacity);
-                }
-            }
+        fn iter<'a>(&'a self) -> Self::Iter<'a> {
+            self.deref().iter()
+        }
 
-            for datum in &self[..] {
-                let index = index(&datum);
-                ensure_capacity(&mut buffers[index]);
-                buffers[index].copy(datum);
-                if buffers[index].len() == buffers[index].local.capacity() {
-                    flush(index, &mut buffers[index]);
-                }
-            }
-            self.clear();
+        type IntoIter<'a> = std::slice::Iter<'a, T>;
+
+        fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a> {
+            (&*self).iter()
         }
     }
 }

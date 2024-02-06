@@ -61,7 +61,7 @@ pub type Exchange<D, F> = ExchangeCore<Vec<D>, F>;
 impl<C, F> ExchangeCore<C, F>
 where
     C: PushPartitioned,
-    for<'a> F: FnMut(C::ReadItem<'a>)->u64
+    for<'a> F: FnMut(&C::Item<'a>)->u64
 {
     /// Allocates a new `Exchange` pact from a distribution function.
     pub fn new(func: F) -> ExchangeCore<C, F> {
@@ -76,7 +76,7 @@ where
 impl<T: Timestamp, C, H: 'static> ParallelizationContractCore<T, C> for ExchangeCore<C, H>
 where
     C: Data + Container + PushPartitioned,
-    for<'a> H: FnMut(C::ReadItem<'a>) -> u64
+    for<'a> H: FnMut(&C::Item<'a>) -> u64
 {
     type Pusher = ExchangePusher<T, C, LogPusher<T, C, Box<dyn Push<BundleCore<T, C>>>>, H>;
     type Puller = LogPuller<T, C, Box<dyn Pull<BundleCore<T, C>>>>;

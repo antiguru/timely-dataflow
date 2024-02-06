@@ -26,7 +26,7 @@ pub trait Exchange<C: PushPartitioned> {
     /// ```
     fn exchange<F: 'static>(&self, route: F) -> Self
     where
-        for<'a> F: FnMut(C::ReadItem<'a>) -> u64;
+        for<'a> F: FnMut(&C::Item<'a>) -> u64;
 }
 
 impl<G: Scope, C: Container> Exchange<C> for StreamCore<G, C>
@@ -35,7 +35,7 @@ where
 {
     fn exchange<F: 'static>(&self, route: F) -> StreamCore<G, C>
     where
-        for<'a> F: FnMut(C::ReadItem<'a>) -> u64,
+        for<'a> F: FnMut(&C::Item<'a>) -> u64,
     {
         let mut container = Default::default();
         self.unary(ExchangeCore::new(route), "Exchange", |_, _| {

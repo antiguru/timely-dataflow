@@ -1,7 +1,8 @@
 //! Buffering and session mechanisms to provide the appearance of record-at-a-time sending,
 //! with the performance of batched sends.
 
-use crate::dataflow::channels::{Bundle, BundleCore, Message};
+use timely_container::{PushContainer, PushInto};
+use crate::dataflow::channels::{BundleCore, Message};
 use crate::progress::Timestamp;
 use crate::dataflow::operators::Capability;
 use crate::communication::Push;
@@ -81,15 +82,15 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
+impl<T, C: Container + PushContainer, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
-    fn give(&mut self, data: D) {
-        if self.buffer.capacity() < crate::container::buffer::default_capacity::<D>() {
+    fn give<D: PushInto<C>>(&mut self, data: D) {
+        if self.buffer.capacity() < C::preferred_capacity() {
             let to_reserve = crate::container::buffer::default_capacity::<D>() - self.buffer.capacity();
             self.buffer.reserve(to_reserve);
         }
-        self.buffer.push(data);
+        data.push_into(&mut self.buffer);
         // assert!(self.buffer.capacity() == Message::<O::Data>::default_length());
         if self.buffer.len() == self.buffer.capacity() {
             self.flush();
@@ -97,7 +98,7 @@ impl<T, D: Data, P: Push<Bundle<T, D>>> Buffer<T, D, P> where T: Eq+Clone {
     }
 
     // Gives an entire message at a specific time.
-    fn give_vec(&mut self, vector: &mut Vec<D>) {
+    fn give_vec(&mut self, vector: &mut C) {
         // flush to ensure fifo-ness
         self.flush();
 
@@ -123,15 +124,15 @@ impl<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  wh
     }
 }
 
-impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P>  where T: Eq+Clone+'a, D: 'a {
+impl<'a, T, C: Container + PushContainer, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
     /// Provides one record at the time specified by the `Session`.
     #[inline]
-    pub fn give(&mut self, data: D) {
+    pub fn give<D: PushInto<C>>(&mut self, data: D) {
         self.buffer.give(data);
     }
     /// Provides an iterator of records at the time specified by the `Session`.
     #[inline]
-    pub fn give_iterator<I: Iterator<Item=D>>(&mut self, iter: I) {
+    pub fn give_iterator<D: PushInto<C>, I: Iterator<Item=D>>(&mut self, iter: I) {
         for item in iter {
             self.give(item);
         }
@@ -142,7 +143,7 @@ impl<'a, T, D: Data, P: Push<BundleCore<T, Vec<D>>>+'a> Session<'a, T, Vec<D>, P
     /// often be more efficient to reuse this memory rather than have timely allocate
     /// new backing memory.
     #[inline]
-    pub fn give_vec(&mut self, message: &mut Vec<D>) {
+    pub fn give_vec(&mut self, message: &mut C) {
         if !message.is_empty() {
             self.buffer.give_vec(message);
         }
