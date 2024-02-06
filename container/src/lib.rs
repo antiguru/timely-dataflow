@@ -41,12 +41,12 @@ pub trait Container: Default + Clone + 'static {
     fn clear(&mut self);
 
     /// TODO
-    type Iter<'a>: IntoIterator<Item=Self::ItemRef<'a>>;
+    type Iter<'a>: Iterator<Item=Self::ItemRef<'a>>;
     /// TODO
     fn iter<'a>(&'a self) -> Self::Iter<'a>;
 
     /// TODO
-    type IntoIter<'a>: IntoIterator<Item=Self::Item<'a>>;
+    type IntoIter<'a>: Iterator<Item=Self::Item<'a>>;
     /// TODO
     fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a>;
 }

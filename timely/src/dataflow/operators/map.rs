@@ -1,6 +1,6 @@
 //! Extension methods for `Stream` based on record-by-record transformation.
 
-use timely_container::columnation::{Columnation, TimelyStack};
+use timely_container::Container;
 use crate::Data;
 use crate::dataflow::{Stream, Scope, StreamCore};
 use crate::dataflow::channels::pact::Pipeline;
@@ -60,17 +60,17 @@ pub trait MapInPlace<S: Scope, D: Data> {
     fn map_in_place<L: FnMut(&mut D)+'static>(&self, logic: L) -> Stream<S, D>;
 }
 
-impl<S: Scope, D: Data + Columnation> Map<S> for StreamCore<S, TimelyStack<D>> {
-    type Data<'a> = &'a D;
+impl<S: Scope, C: Container> Map<S> for StreamCore<S, C> {
+    type Data<'a> = C::Item<'a>;
     fn map<D2: Data, L: 'static>(&self, mut logic: L) -> Stream<S, D2>
     where
-        for<'a> L: FnMut(&'a D)->D2,
+        for<'a> L: FnMut(Self::Data<'a>)->D2,
     {
         let mut vector = Default::default();
         self.unary(Pipeline, "Map", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.iter().map(|x| logic(x)));
+                output.session(&time).give_iterator(vector.into_iter().map(|x| logic(x)));
             });
         })
     }
@@ -80,38 +80,13 @@ impl<S: Scope, D: Data + Columnation> Map<S> for StreamCore<S, TimelyStack<D>> {
     fn flat_map<I: IntoIterator, L: 'static>(&self, mut logic: L) -> Stream<S, I::Item>
     where
         I::Item: Data,
-        for<'a> L: FnMut(&'a D)->I,
+        for<'a> L: FnMut(Self::Data<'a>)->I,
     {
         let mut vector = Default::default();
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.iter().flat_map(|x| logic(x).into_iter()));
-            });
-        })
-    }
-}
-
-impl<S: Scope, D: Data> Map<S> for Stream<S, D> {
-    type Data<'a> = D;
-    fn map<D2: Data, L: FnMut(D)->D2+'static>(&self, mut logic: L) -> Stream<S, D2> {
-        let mut vector = Vec::new();
-        self.unary(Pipeline, "Map", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.drain(..).map(|x| logic(x)));
-            });
-        })
-    }
-    // TODO : This would be more robust if it captured an iterator and then pulled an appropriate
-    // TODO : number of elements from the iterator. This would allow iterators that produce many
-    // TODO : records without taking arbitrarily long and arbitrarily much memory.
-    fn flat_map<I: IntoIterator, L: FnMut(D)->I+'static>(&self, mut logic: L) -> Stream<S, I::Item> where I::Item: Data {
-        let mut vector = Vec::new();
-        self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.drain(..).flat_map(|x| logic(x).into_iter()));
+                output.session(&time).give_iterator(vector.into_iter().flat_map(|x| logic(x).into_iter()));
             });
         })
     }
