@@ -1,15 +1,12 @@
 //! Filters a stream by a predicate.
 
-use timely_container::columnation::{Columnation, TimelyStack};
-use crate::Data;
+use timely_container::{Container, PushContainer, PushInto};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope, StreamCore};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for filtering.
-pub trait Filter {
-    /// The data type we operate on.
-    type Data<'a>;
+pub trait Filter<C: Container> {
     /// Returns a new instance of `self` containing only records satisfying `predicate`.
     ///
     /// # Examples
@@ -24,38 +21,23 @@ pub trait Filter {
     /// ```
     fn filter<P: 'static>(&self, predicate: P) -> Self
     where
-        for<'a> P: FnMut(Self::Data<'a>)->bool;
+        for<'a> P: FnMut(&C::Item<'a>)->bool;
 }
 
-impl<G: Scope, D: Data> Filter for Stream<G, D> {
-    type Data<'a> = &'a D;
-    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> Stream<G, D> {
-        let mut vector = Vec::new();
-        self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
-            input.for_each(|time, data| {
-                data.swap(&mut vector);
-                vector.retain(|x| predicate(x));
-                if !vector.is_empty() {
-                    output.session(&time).give_vec(&mut vector);
-                }
-            });
-        })
-    }
-}
-
-impl<G: Scope, D: Data + Columnation> Filter for StreamCore<G, TimelyStack<D>> {
-    type Data<'a> = &'a D;
-    fn filter<P: FnMut(&D)->bool+'static>(&self, mut predicate: P) -> StreamCore<G, TimelyStack<D>> {
+impl<G: Scope, C: PushContainer> Filter<C> for StreamCore<G, C>
+where
+    for<'a> C::Item<'a>: PushInto<C>,
+{
+    fn filter<P>(&self, mut predicate: P) -> StreamCore<G, C>
+    where
+        for<'a> P: FnMut(&C::Item<'a>)->bool+'static
+    {
         let mut vector = Default::default();
-        let mut filtered = TimelyStack::default();
         self.unary(Pipeline, "Filter", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                for item in vector.iter().filter(|x| predicate(x)) {
-                    filtered.copy(item);
-                }
-                if !filtered.is_empty() {
-                    output.session(&time).give_container(&mut filtered);
+                if !vector.is_empty() {
+                    output.session(&time).give_iterator(vector.drain().filter(|x| predicate(&x)));
                 }
             });
         })

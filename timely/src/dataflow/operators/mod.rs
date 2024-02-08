@@ -34,6 +34,8 @@ pub use self::generic::{Notificator, FrontierNotificator};
 pub use self::reclock::Reclock;
 pub use self::count::Accumulate;
 
+pub mod containers;
+
 pub mod enterleave;
 pub mod input;
 pub mod flow_controlled;
@@ -63,4 +65,5 @@ pub mod count;
 
 // keep "mint" module-private
 mod capability;
+
 pub use self::capability::{ActivateCapability, Capability, InputCapability, CapabilitySet, DowngradeError};

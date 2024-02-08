@@ -3,7 +3,7 @@
 #![forbid(missing_docs)]
 
 pub mod columnation;
-mod flatcontainer;
+pub mod flatcontainer;
 
 /// A container transferring data through dataflow edges
 ///
@@ -18,10 +18,10 @@ mod flatcontainer;
 /// is efficient (which is not necessarily the case when deriving `Clone`.)
 /// TODO: Don't require `Container: Clone`
 pub trait Container: Default + Clone + 'static {
-    /// The type of elements this container holds.
+    /// The type of elements when reading non-destructively from the container.
     type ItemRef<'a> where Self: 'a;
 
-    /// The type of elements this container holds.
+    /// The type of elements when draining the continer.
     type Item<'a> where Self: 'a;
 
     /// The number of elements in this container
@@ -40,30 +40,34 @@ pub trait Container: Default + Clone + 'static {
     /// After calling `clear`, `is_empty` must return `true` and `len` 0.
     fn clear(&mut self);
 
-    /// TODO
+    /// Iterator type when reading from the container.
     type Iter<'a>: Iterator<Item=Self::ItemRef<'a>>;
-    /// TODO
+
+    /// Returns an iterator that reads the contents of this container.
     fn iter<'a>(&'a self) -> Self::Iter<'a>;
 
-    /// TODO
-    type IntoIter<'a>: Iterator<Item=Self::Item<'a>>;
-    /// TODO
-    fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a>;
+    /// Iterator type when draining the container.
+    type DrainIter<'a>: Iterator<Item=Self::Item<'a>>;
+
+    /// Returns an iterator that drains the contents of this container.
+    // TODO: What invariants should hold after `drain` returns?
+    fn drain<'a>(&'a mut self) -> Self::DrainIter<'a>;
 }
 
-/// TODO
+/// A type that can push itself into a container.
 pub trait PushInto<C> {
-    /// TODO
+    /// Push self into the target container.
     fn push_into(self, target: &mut C);
 }
 
-/// TODO
-pub trait PushContainer {
-    /// TODO
+/// A type that has the necessary infrastructure to push elements, without specifying how pushing
+/// itself works. For this, pushable types should implement [`PushInto`].
+pub trait PushContainer: Container {
+    /// Return the capacity of the container.
     fn capacity(&self) -> usize;
-    /// TODO
+    /// Return the preferred capacity of the container.
     fn preferred_capacity() -> usize;
-    /// TODO
+    /// Reserve space for `additional` elements, possibly increasing the capacity of the container.
     fn reserve(&mut self, additional: usize);
 }
 
@@ -87,14 +91,14 @@ impl<T: Clone + 'static> Container for Vec<T> {
         self.as_slice().iter()
     }
 
-    type IntoIter<'a> = <Vec<T> as IntoIterator>::IntoIter;
+    type DrainIter<'a> = <Vec<T> as IntoIterator>::IntoIter;
 
-    fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a> {
+    fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
         IntoIterator::into_iter(std::mem::take(self))
     }
 }
 
-impl<T> PushContainer for Vec<T> {
+impl<T: Clone + 'static> PushContainer for Vec<T> {
     fn capacity(&self) -> usize {
         self.capacity()
     }
@@ -111,6 +115,12 @@ impl<T> PushContainer for Vec<T> {
 impl<T> PushInto<Vec<T>> for T {
     fn push_into(self, target: &mut Vec<T>) {
         target.push(self)
+    }
+}
+
+impl<'a, T: Clone> PushInto<Vec<T>> for &'a T {
+    fn push_into(self, target: &mut Vec<T>) {
+        target.push(self.clone())
     }
 }
 
@@ -147,9 +157,9 @@ mod rc {
             self.deref().iter()
         }
 
-        type IntoIter<'a> = T::Iter<'a>;
+        type DrainIter<'a> = T::Iter<'a>;
 
-        fn into_iter(&mut self) -> Self::IntoIter<'_> {
+        fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
         }
     }
@@ -188,16 +198,16 @@ mod arc {
             self.deref().iter()
         }
 
-        type IntoIter<'a> = T::Iter<'a>;
+        type DrainIter<'a> = T::Iter<'a>;
 
-        fn into_iter(&mut self) -> Self::IntoIter<'_> {
+        fn drain(&mut self) -> Self::DrainIter<'_> {
             self.iter()
         }
     }
 }
 
 /// A container that can partition itself into pieces.
-pub trait PushPartitioned: Container + PushContainer {
+pub trait PushPartitioned: PushContainer {
     /// Partition and push this container.
     ///
     /// Drain all elements from `self`, and use the function `index` to determine which `buffer` to
@@ -208,7 +218,7 @@ pub trait PushPartitioned: Container + PushContainer {
         F: FnMut(usize, &mut Self);
 }
 
-impl<T: Container + PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>: PushInto<T> {
+impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>: PushInto<T> {
     fn push_partitioned<I, F>(&mut self, buffers: &mut [Self], mut index: I, mut flush: F)
     where
         for<'a> I: FnMut(&Self::Item<'a>) -> usize,
@@ -222,7 +232,7 @@ impl<T: Container + PushContainer + 'static> PushPartitioned for T where for<'a>
             }
         };
 
-        for datum in self.into_iter() {
+        for datum in self.drain() {
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
             datum.push_into(&mut buffers[index]);

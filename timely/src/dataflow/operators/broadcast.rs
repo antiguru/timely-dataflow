@@ -1,11 +1,12 @@
 //! Broadcast records to all workers.
 
 use crate::ExchangeData;
-use crate::dataflow::{Stream, Scope};
-use crate::dataflow::operators::{Map, Exchange};
+use crate::dataflow::{Scope, Stream};
+use crate::dataflow::operators::containers::Map;
+use crate::dataflow::operators::{Exchange};
 
 /// Broadcast records to all workers.
-pub trait Broadcast<D: ExchangeData> {
+pub trait Broadcast<C: ExchangeData> {
     /// Broadcast records to all workers.
     ///
     /// # Examples
@@ -21,14 +22,14 @@ pub trait Broadcast<D: ExchangeData> {
     fn broadcast(&self) -> Self;
 }
 
-impl<G: Scope, D: ExchangeData> Broadcast<D> for Stream<G, D> {
+impl<G: Scope, D: ExchangeData> Broadcast<Vec<D>> for Stream<G, D> {
     fn broadcast(&self) -> Stream<G, D> {
 
         // NOTE: Simplified implementation due to underlying motion
         // in timely dataflow internals. Optimize once they have
         // settled down.
         let peers = self.scope().peers() as u64;
-        self.flat_map(move |x| (0 .. peers).map(move |i| (i,x.clone())))
+        self.flat_map(move |x| (0 .. peers).map(move |i| (i, x.clone())))
             .exchange(|ix| ix.0)
             .map(|(_i,x)| x)
     }

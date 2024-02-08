@@ -136,6 +136,12 @@ impl<T: Columnation> TimelyStack<T> {
     pub fn capacity(&self) -> usize {
         self.local.capacity()
     }
+
+    /// Reserve space for `additional` elements.
+    #[inline]
+    pub fn reserve(&mut self, additional: usize) {
+        self.local.reserve(additional)
+    }
 }
 
 impl<A: Columnation, B: Columnation> TimelyStack<(A, B)> {
@@ -304,7 +310,7 @@ mod serde {
 
 mod container {
     use std::ops::Deref;
-    use crate::Container;
+    use crate::{Container, PushContainer};
 
     use crate::columnation::{Columnation, TimelyStack};
 
@@ -330,10 +336,24 @@ mod container {
             self.deref().iter()
         }
 
-        type IntoIter<'a> = std::slice::Iter<'a, T>;
+        type DrainIter<'a> = std::slice::Iter<'a, T>;
 
-        fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a> {
+        fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
             (&*self).iter()
+        }
+    }
+
+    impl<T: Columnation + 'static> PushContainer for TimelyStack<T> {
+        fn capacity(&self) -> usize {
+            self.capacity()
+        }
+
+        fn preferred_capacity() -> usize {
+            crate::buffer::default_capacity::<T>()
+        }
+
+        fn reserve(&mut self, additional: usize) {
+            self.reserve(additional)
         }
     }
 }

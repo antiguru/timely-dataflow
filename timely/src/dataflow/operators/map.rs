@@ -7,9 +7,7 @@ use crate::dataflow::channels::pact::Pipeline;
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Extension trait for `Stream`.
-pub trait Map<S: Scope> {
-    /// The type of data to be mapped.
-    type Data<'a>;
+pub trait Map<S: Scope, C: Container> {
     /// Consumes each element of the stream and yields a new element.
     ///
     /// # Examples
@@ -24,7 +22,7 @@ pub trait Map<S: Scope> {
     /// ```
     fn map<D2: Data, L: 'static>(&self, logic: L) -> Stream<S, D2>
     where
-        for<'a> L: FnMut(Self::Data<'a>)->D2;
+        for<'a> L: FnMut(C::Item<'a>)->D2;
     /// Consumes each element of the stream and yields some number of new elements.
     ///
     /// # Examples
@@ -40,7 +38,7 @@ pub trait Map<S: Scope> {
     fn flat_map<I: IntoIterator, L: 'static>(&self, logic: L) -> Stream<S, I::Item>
     where
         I::Item: Data,
-        for<'a> L: FnMut(Self::Data<'a>)->I;
+        for<'a> L: FnMut(C::Item<'a>)->I;
 }
 
 /// Extension trait for `Stream`.
@@ -60,17 +58,16 @@ pub trait MapInPlace<S: Scope, D: Data> {
     fn map_in_place<L: FnMut(&mut D)+'static>(&self, logic: L) -> Stream<S, D>;
 }
 
-impl<S: Scope, C: Container> Map<S> for StreamCore<S, C> {
-    type Data<'a> = C::Item<'a>;
+impl<S: Scope, C: Container> Map<S, C> for StreamCore<S, C> {
     fn map<D2: Data, L: 'static>(&self, mut logic: L) -> Stream<S, D2>
     where
-        for<'a> L: FnMut(Self::Data<'a>)->D2,
+        for<'a> L: FnMut(C::Item<'a>)->D2,
     {
         let mut vector = Default::default();
         self.unary(Pipeline, "Map", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.into_iter().map(|x| logic(x)));
+                output.session(&time).give_iterator(vector.drain().map(|x| logic(x)));
             });
         })
     }
@@ -80,13 +77,13 @@ impl<S: Scope, C: Container> Map<S> for StreamCore<S, C> {
     fn flat_map<I: IntoIterator, L: 'static>(&self, mut logic: L) -> Stream<S, I::Item>
     where
         I::Item: Data,
-        for<'a> L: FnMut(Self::Data<'a>)->I,
+        for<'a> L: FnMut(C::Item<'a>)->I,
     {
         let mut vector = Default::default();
         self.unary(Pipeline, "FlatMap", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.into_iter().flat_map(|x| logic(x).into_iter()));
+                output.session(&time).give_iterator(vector.drain().flat_map(|x| logic(x).into_iter()));
             });
         })
     }

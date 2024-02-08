@@ -1,6 +1,6 @@
 //! Present a [`FlatStack`] as a timely container.
 
-use flatcontainer::{CopyOnto, FlatStack, Region};
+pub use flatcontainer::*;
 use crate::{buffer, Container, PushContainer, PushInto};
 
 impl<R: Region + Clone + 'static> Container for FlatStack<R> {
@@ -21,9 +21,9 @@ impl<R: Region + Clone + 'static> Container for FlatStack<R> {
         IntoIterator::into_iter(self)
     }
 
-    type IntoIter<'a> = Self::Iter<'a>;
+    type DrainIter<'a> = Self::Iter<'a>;
 
-    fn into_iter<'a>(&'a mut self) -> Self::IntoIter<'a> {
+    fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
         IntoIterator::into_iter(&*self)
     }
 }
