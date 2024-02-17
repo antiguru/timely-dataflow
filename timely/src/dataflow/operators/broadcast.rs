@@ -2,8 +2,7 @@
 
 use crate::ExchangeData;
 use crate::dataflow::{Scope, Stream};
-use crate::dataflow::operators::containers::Map;
-use crate::dataflow::operators::{Exchange};
+use crate::dataflow::operators::{Map, Exchange};
 
 /// Broadcast records to all workers.
 pub trait Broadcast<C: ExchangeData> {

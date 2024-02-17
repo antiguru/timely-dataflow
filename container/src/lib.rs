@@ -50,7 +50,7 @@ pub trait Container: Default + Clone + 'static {
     type DrainIter<'a>: Iterator<Item=Self::Item<'a>>;
 
     /// Returns an iterator that drains the contents of this container.
-    // TODO: What invariants should hold after `drain` returns?
+    /// Drain leaves the container in an undefined state.
     fn drain<'a>(&'a mut self) -> Self::DrainIter<'a>;
 }
 
@@ -63,6 +63,10 @@ pub trait PushInto<C> {
 /// A type that has the necessary infrastructure to push elements, without specifying how pushing
 /// itself works. For this, pushable types should implement [`PushInto`].
 pub trait PushContainer: Container {
+    /// Push `item` into self
+    fn push<T: PushInto<Self>>(&mut self, item: T) {
+        item.push_into(self)
+    }
     /// Return the capacity of the container.
     fn capacity(&self) -> usize;
     /// Return the preferred capacity of the container.
@@ -91,10 +95,10 @@ impl<T: Clone + 'static> Container for Vec<T> {
         self.as_slice().iter()
     }
 
-    type DrainIter<'a> = <Vec<T> as IntoIterator>::IntoIter;
+    type DrainIter<'a> = std::vec::Drain<'a, T>;
 
-    fn drain<'a>(&'a mut self) -> Self::DrainIter<'a> {
-        IntoIterator::into_iter(std::mem::take(self))
+    fn drain(&mut self) -> Self::DrainIter<'_> {
+        self.drain(..)
     }
 }
 
@@ -235,7 +239,7 @@ impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>
         for datum in self.drain() {
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
-            datum.push_into(&mut buffers[index]);
+            buffers[index].push(datum);
             if buffers[index].len() == buffers[index].capacity() {
                 flush(index, &mut buffers[index]);
             }

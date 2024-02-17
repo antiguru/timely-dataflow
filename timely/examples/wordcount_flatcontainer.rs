@@ -3,7 +3,7 @@ extern crate timely;
 use std::collections::HashMap;
 
 use timely::dataflow::{InputHandle, ProbeHandle};
-use timely::dataflow::operators::containers::Map;
+use timely::dataflow::operators::core::Map;
 use timely::dataflow::operators::{Operator, Inspect, Probe};
 use timely::dataflow::channels::pact::ExchangeCore;
 use timely_container::flatcontainer::{Containerized, FlatStack};

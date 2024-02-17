@@ -11,7 +11,7 @@ pub trait Map<S: Scope, C: Container> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::containers::Map;
+    /// use timely::dataflow::operators::core::Map;
     /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {
@@ -27,7 +27,7 @@ pub trait Map<S: Scope, C: Container> {
     ///
     /// # Examples
     /// ```
-    /// use timely::dataflow::operators::containers::Map;
+    /// use timely::dataflow::operators::core::Map;
     /// use timely::dataflow::operators::{ToStream, Inspect};
     ///
     /// timely::example(|scope| {

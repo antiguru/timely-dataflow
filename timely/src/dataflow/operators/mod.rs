@@ -34,7 +34,7 @@ pub use self::generic::{Notificator, FrontierNotificator};
 pub use self::reclock::Reclock;
 pub use self::count::Accumulate;
 
-pub mod containers;
+pub mod core;
 
 pub mod enterleave;
 pub mod input;

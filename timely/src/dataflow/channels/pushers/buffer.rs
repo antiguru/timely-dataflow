@@ -82,7 +82,7 @@ impl<T, C: Container, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq
     }
 }
 
-impl<T, C: Container + PushContainer, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
+impl<T, C: PushContainer, P: Push<BundleCore<T, C>>> BufferCore<T, C, P> where T: Eq+Clone {
     // internal method for use by `Session`.
     #[inline]
     fn give<D: PushInto<C>>(&mut self, data: D) {
@@ -124,7 +124,7 @@ impl<'a, T, C: Container, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  wh
     }
 }
 
-impl<'a, T, C: Container + PushContainer, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
+impl<'a, T, C: PushContainer, P: Push<BundleCore<T, C>>+'a> Session<'a, T, C, P>  where T: Eq+Clone+'a, C: 'a {
     /// Provides one record at the time specified by the `Session`.
     #[inline]
     pub fn give<D: PushInto<C>>(&mut self, data: D) {
