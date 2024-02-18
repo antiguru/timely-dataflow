@@ -2,6 +2,7 @@
 //! are independent of specific container types.
 
 pub mod concat;
+pub mod delay;
 pub mod exchange;
 pub mod feedback;
 pub mod filter;
@@ -16,6 +17,7 @@ pub mod to_stream;
 pub mod unordered_input;
 
 pub use concat::{Concat, Concatenate};
+pub use delay::Delay;
 pub use exchange::Exchange;
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use filter::Filter;

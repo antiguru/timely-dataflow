@@ -1,15 +1,15 @@
 //! Operators acting on timestamps to logically delay records
 
 use std::collections::HashMap;
+use timely_container::{Container, PushContainer, PushInto};
 
-use crate::Data;
 use crate::order::{PartialOrder, TotalOrder};
 use crate::dataflow::channels::pact::Pipeline;
-use crate::dataflow::{Stream, Scope};
+use crate::dataflow::{Scope, StreamCore};
 use crate::dataflow::operators::generic::operator::Operator;
 
 /// Methods to advance the timestamps of records or batches of records.
-pub trait Delay<G: Scope, D: Data> {
+pub trait Delay<G: Scope, C: Container> {
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -36,7 +36,9 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
+    fn delay<L>(&self, func: L) -> Self
+    where
+        for<'a> L: FnMut(&C::Item<'a>, &G::Timestamp)->G::Timestamp+'static;
 
     /// Advances the timestamp of records using a supplied function.
     ///
@@ -63,8 +65,10 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
-    where G::Timestamp: TotalOrder;
+    fn delay_total<L>(&self, func: L) -> Self
+    where
+        G::Timestamp: TotalOrder,
+        for<'a> L: FnMut(&C::Item<'a>, &G::Timestamp)->G::Timestamp+'static;
 
     /// Advances the timestamp of batches of records using a supplied function.
     ///
@@ -91,21 +95,29 @@ pub trait Delay<G: Scope, D: Data> {
     ///            });
     /// });
     /// ```
-    fn delay_batch<L: FnMut(&G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self;
+    fn delay_batch<L>(&self, func: L) -> Self
+    where
+        L: FnMut(&G::Timestamp)->G::Timestamp+'static;
 }
 
-impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
-    fn delay<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, mut func: L) -> Self {
+impl<G: Scope, C: PushContainer> Delay<G, C> for StreamCore<G, C>
+where
+    for<'a> C::Item<'a>: PushInto<C>,
+{
+    fn delay<L>(&self, mut func: L) -> Self
+    where
+        for<'a> L: FnMut(&C::Item<'a>, &G::Timestamp)->G::Timestamp+'static
+    {
         let mut elements = HashMap::new();
-        let mut vector = Vec::new();
+        let mut vector = C::default();
         self.unary_notify(Pipeline, "Delay", vec![], move |input, output, notificator| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                for datum in vector.drain(..) {
+                for datum in vector.drain() {
                     let new_time = func(&datum, &time);
                     assert!(time.time().less_equal(&new_time));
                     elements.entry(new_time.clone())
-                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
+                            .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); C::default() })
                             .push(datum);
                 }
             });
@@ -113,14 +125,16 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut data) = elements.remove(&time) {
-                    output.session(&time).give_iterator(data.drain(..));
+                    output.session(&time).give_iterator(data.drain());
                 }
             });
         })
     }
 
-    fn delay_total<L: FnMut(&D, &G::Timestamp)->G::Timestamp+'static>(&self, func: L) -> Self
-    where G::Timestamp: TotalOrder
+    fn delay_total<L>(&self, func: L) -> Self
+    where
+        G::Timestamp: TotalOrder,
+        for<'a> L: FnMut(&C::Item<'a>, &G::Timestamp)->G::Timestamp+'static
     {
         self.delay(func)
     }
@@ -133,14 +147,14 @@ impl<G: Scope, D: Data> Delay<G, D> for Stream<G, D> {
                 assert!(time.time().less_equal(&new_time));
                 elements.entry(new_time.clone())
                         .or_insert_with(|| { notificator.notify_at(time.delayed(&new_time)); Vec::new() })
-                        .push(data.replace(Vec::new()));
+                        .push(data.replace(C::default()));
             });
 
             // for each available notification, send corresponding set
             notificator.for_each(|time,_,_| {
                 if let Some(mut datas) = elements.remove(&time) {
                     for mut data in datas.drain(..) {
-                        output.session(&time).give_vec(&mut data);
+                        output.session(&time).give_container(&mut data);
                     }
                 }
             });
