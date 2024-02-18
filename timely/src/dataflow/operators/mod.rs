@@ -10,19 +10,18 @@
 
 pub use self::enterleave::{Enter, EnterAt, Leave};
 pub use self::input::Input;
-pub use self::unordered_input::{UnorderedInput, UnorderedInputCore};
+pub use self::unordered_input::UnorderedInput;
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use self::concat::{Concat, Concatenate};
 pub use self::partition::Partition;
 pub use self::map::Map;
-pub use self::map::MapInPlace;
 pub use self::inspect::{Inspect, InspectCore};
 pub use self::filter::Filter;
 pub use self::delay::Delay;
 pub use self::exchange::Exchange;
 pub use self::broadcast::Broadcast;
 pub use self::probe::Probe;
-pub use self::to_stream::{ToStream, ToStreamCore};
+pub use self::to_stream::ToStream;
 pub use self::capture::Capture;
 pub use self::branch::{Branch, BranchWhen};
 pub use self::ok_err::OkErr;

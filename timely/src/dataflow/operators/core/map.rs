@@ -51,7 +51,7 @@ impl<S: Scope, C: Container> Map<S, C> for StreamCore<S, C> {
         self.unary(Pipeline, "Map", move |_,_| move |input, output| {
             input.for_each(|time, data| {
                 data.swap(&mut vector);
-                output.session(&time).give_iterator(vector.drain().map(|x| logic(x)));
+                output.session(&time).give_iterator(vector.drain().map(&mut logic));
             });
         })
     }
