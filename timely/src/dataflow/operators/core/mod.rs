@@ -3,6 +3,7 @@
 
 pub mod concat;
 pub mod exchange;
+pub mod feedback;
 pub mod filter;
 pub mod input;
 pub mod inspect;
@@ -16,6 +17,7 @@ pub mod unordered_input;
 
 pub use concat::{Concat, Concatenate};
 pub use exchange::Exchange;
+pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use filter::Filter;
 pub use input::Input;
 pub use map::Map;
