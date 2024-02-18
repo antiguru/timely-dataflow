@@ -30,7 +30,7 @@ pub use self::result::ResultStream;
 pub use self::generic::Operator;
 pub use self::generic::{Notificator, FrontierNotificator};
 
-pub use self::reclock::Reclock;
+pub use self::core::reclock::Reclock;
 pub use self::count::Accumulate;
 
 pub mod core;
@@ -40,26 +40,26 @@ pub mod input;
 pub mod flow_controlled;
 pub mod unordered_input;
 pub mod feedback;
-pub mod concat;
+pub use self::core::concat;
 pub mod partition;
 pub mod map;
-pub mod inspect;
-pub mod filter;
+pub use self::core::inspect;
+pub use self::core::filter;
 pub mod delay;
-pub mod exchange;
+pub use self::core::exchange;
 pub mod broadcast;
-pub mod probe;
+pub use self::core::probe;
 pub mod to_stream;
 pub mod capture;
 pub mod branch;
 pub mod ok_err;
-pub mod rc;
+pub use self::core::rc;
 pub mod result;
 
 pub mod aggregation;
 pub mod generic;
 
-pub mod reclock;
+pub use self::core::reclock;
 pub mod count;
 
 // keep "mint" module-private
