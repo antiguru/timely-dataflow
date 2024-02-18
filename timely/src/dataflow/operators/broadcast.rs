@@ -33,3 +33,47 @@ impl<G: Scope, D: ExchangeData> Broadcast<Vec<D>> for Stream<G, D> {
             .map(|(_i,x)| x)
     }
 }
+
+#[cfg(feature = "bincode")]
+mod flatcontainer {
+    use crate::container::flatcontainer::MirrorRegion;
+    use crate::container::flatcontainer::FlatStack;
+    use crate::container::flatcontainer::impls::tuple::TupleABRegion;
+    use crate::container::flatcontainer::Region;
+    use crate::dataflow::operators::{Broadcast, Operator};
+    use crate::dataflow::{Scope, StreamCore};
+    use crate::dataflow::channels::pact::{ExchangeCore, Pipeline};
+    use crate::ExchangeData;
+
+    impl<G: Scope, R: Region + ExchangeData> Broadcast<FlatStack<R>> for StreamCore<G, FlatStack<R>>
+    where
+        FlatStack<R>: ExchangeData,
+        R::Index: ExchangeData,
+    {
+        fn broadcast(&self) -> Self {
+            let peers = self.scope().peers() as u64;
+            self.unary::<FlatStack<TupleABRegion<MirrorRegion<u64>, R>>, _, _, _>(Pipeline, "Broadcast send", |_cap, _info| {
+                move |input, output| {
+                    while let Some((time, data)) = input.next() {
+                        let mut session = output.session(&time);
+                        for i in 0..peers {
+                            for item in &*data {
+                                session.give((i, item))
+                            }
+                        }
+                    }
+                }
+            })
+                .unary(ExchangeCore::new(|(i, _)| *i), "Broadcast recv", |_cap, _info| {
+                    |input, output| {
+                        while let Some((time, data)) = input.next() {
+                            let mut session = output.session(&time);
+                            for (_, item) in &*data {
+                                session.give(item)
+                            }
+                        }
+                    }
+                })
+        }
+    }
+}
