@@ -56,7 +56,7 @@ For example, the `map_in_place` method takes a closure which receives a mutable 
 ```rust
 extern crate timely;
 
-use timely::dataflow::operators::{ToStream, Inspect, Map, MapInPlace};
+use timely::dataflow::operators::{ToStream, Inspect, Map};
 
 fn main() {
     timely::execute_from_args(std::env::args(), |worker| {
