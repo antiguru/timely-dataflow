@@ -1,18 +1,21 @@
-extern crate timely;
+//! Wordcount based on flatcontainer.
 
-use std::collections::HashMap;
-
-use timely::dataflow::channels::pact::{ExchangeCore, Pipeline};
-use timely::dataflow::operators::{Inspect, Operator, Probe};
-use timely::dataflow::operators::core::InputHandle;
-use timely::dataflow::ProbeHandle;
-use timely::container::flatcontainer::{Containerized, FlatStack};
+#[cfg(feature = "bincode")]
+use {
+    std::collections::HashMap,
+    timely::container::flatcontainer::{Containerized, FlatStack},
+    timely::dataflow::channels::pact::{ExchangeCore, Pipeline},
+    timely::dataflow::operators::core::InputHandle,
+    timely::dataflow::operators::{Inspect, Operator, Probe},
+    timely::dataflow::ProbeHandle,
+};
 
 #[cfg(feature = "bincode")]
 fn main() {
     // initializes and runs a timely dataflow.
     timely::execute_from_args(std::env::args(), |worker| {
-        let mut input = <InputHandle<_, FlatStack<<(String, i64) as Containerized>::Region>>>::new();
+        let mut input =
+            <InputHandle<_, FlatStack<<(String, i64) as Containerized>::Region>>>::new();
         let mut probe = ProbeHandle::new();
 
         // create a new input, exchange data, and inspect its output
