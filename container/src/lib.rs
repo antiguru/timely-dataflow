@@ -28,7 +28,8 @@ pub trait Container: Default + Clone + 'static {
     ///
     /// The length of a container must be consistent between sending and receiving it.
     /// When exchanging a container and partitioning it into pieces, the sum of the length
-    /// of all pieces must be equal to the length of the original container.
+    /// of all pieces must be equal to the length of the original container. When combining
+    /// containers, the length of the result must be the sum of the individual parts.
     fn len(&self) -> usize;
 
     /// Determine if the container contains any elements, corresponding to `len() == 0`.
@@ -62,6 +63,12 @@ pub trait PushInto<C> {
 
 /// A type that has the necessary infrastructure to push elements, without specifying how pushing
 /// itself works. For this, pushable types should implement [`PushInto`].
+// TODO: Reconsider this interface because it assumes
+//   * Containers have a capacity
+//   * Push presents single elements.
+//   * Instead of testing `len == cap`, we could have a `is_full` to test that we might
+//     not be able to absorb more data.
+//   * Example: A FlatStack with optimized offsets and deduplication can absorb many elements without reallocation. What does capacity mean in this context?
 pub trait PushContainer: Container {
     /// Push `item` into self
     fn push<T: PushInto<Self>>(&mut self, item: T) {
@@ -240,7 +247,7 @@ impl<T: PushContainer + 'static> PushPartitioned for T where for<'a> T::Item<'a>
             let index = index(&datum);
             ensure_capacity(&mut buffers[index]);
             buffers[index].push(datum);
-            if buffers[index].len() == buffers[index].capacity() {
+            if buffers[index].len() >= buffers[index].capacity() {
                 flush(index, &mut buffers[index]);
             }
         }
