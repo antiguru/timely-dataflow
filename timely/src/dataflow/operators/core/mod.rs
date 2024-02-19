@@ -21,7 +21,7 @@ pub use delay::Delay;
 pub use exchange::Exchange;
 pub use self::feedback::{Feedback, LoopVariable, ConnectLoop};
 pub use filter::Filter;
-pub use input::Input;
+pub use input::{Input, Handle as InputHandle};
 pub use map::Map;
 pub use ok_err::OkErr;
 pub use probe::{Probe, Handle};
