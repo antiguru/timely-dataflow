@@ -43,6 +43,7 @@ impl<R: Region + Clone + 'static> PushContainer for FlatStack<R> {
 }
 
 impl<R: Region + Clone + 'static, T: CopyOnto<R>> PushInto<FlatStack<R>> for T {
+    #[inline]
     fn push_into(self, target: &mut FlatStack<R>) {
         target.copy(self);
     }

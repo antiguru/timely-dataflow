@@ -71,6 +71,7 @@ pub trait PushInto<C> {
 //   * Example: A FlatStack with optimized offsets and deduplication can absorb many elements without reallocation. What does capacity mean in this context?
 pub trait PushContainer: Container {
     /// Push `item` into self
+    #[inline]
     fn push<T: PushInto<Self>>(&mut self, item: T) {
         item.push_into(self)
     }
@@ -124,12 +125,14 @@ impl<T: Clone + 'static> PushContainer for Vec<T> {
 }
 
 impl<T> PushInto<Vec<T>> for T {
+    #[inline]
     fn push_into(self, target: &mut Vec<T>) {
         target.push(self)
     }
 }
 
 impl<'a, T: Clone> PushInto<Vec<T>> for &'a T {
+    #[inline]
     fn push_into(self, target: &mut Vec<T>) {
         target.push(self.clone())
     }
