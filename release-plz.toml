@@ -2,6 +2,8 @@
 # disable the changelog for all packages
 changelog_update = false
 
+publish = false
+
 [[package]]
 name = "timely"
 # enable the changelog for this package
