@@ -764,7 +764,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             for (time, delta) in produced.drain() {
                 for target in &self.edges[output] {
                     pointstamps.update((Location::from(*target), time.clone()), delta);
-                    temp_active.push(Reverse(target.node));
+                    // temp_active.push(Reverse(target.node));
                 }
             }
         }
