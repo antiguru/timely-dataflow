@@ -611,8 +611,9 @@ struct PerOperatorState<T: Timestamp> {
     index: usize,       // index of the operator within its parent scope
     id: usize,          // worker-unique identifier
 
-    local: bool,        // indicates whether the operator will exchange data or not
+    local: bool,        // indicates whether progress information is pre-circulated or not
     notify: bool,
+    pipeline: bool,     // indicates whether all inputs use thread-local (pipeline) channels
     inputs: usize,      // number of inputs to the operator
     outputs: usize,     // number of outputs from the operator
 
@@ -637,6 +638,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:         usize::MAX,
             local:      false,
             notify:     true,
+            pipeline:   false,
             inputs,
             outputs,
 
@@ -661,6 +663,7 @@ impl<T: Timestamp> PerOperatorState<T> {
         let inputs = scope.inputs();
         let outputs = scope.outputs();
         let notify = scope.notify_me();
+        let pipeline = scope.pipeline();
 
         let (internal_summary, shared_progress, operator) = scope.initialize();
 
@@ -690,6 +693,7 @@ impl<T: Timestamp> PerOperatorState<T> {
             id:                 identifier,
             local,
             notify,
+            pipeline,
             inputs,
             outputs,
             edges:              vec![vec![]; outputs],
@@ -831,7 +835,7 @@ impl<T: Timestamp> Drop for PerOperatorState<T> {
 /// * Both operators have exactly 1 input and 1 output
 /// * A's sole output targets B's sole input (no fan-out)
 /// * B's sole input comes from A's output (no fan-in)
-/// * Both are `local == true` (pipeline edges only)
+/// * The target uses pipeline (thread-local) channels on its input
 /// * Both have `notify == false` (no frontier observation)
 ///
 /// Returns chains of at least `min_length` operators, identified by index.
@@ -868,8 +872,9 @@ fn detect_chains<T: Timestamp>(
         if src_child.inputs != 1 || src_child.outputs != 1 { continue; }
         if tgt_child.inputs != 1 || tgt_child.outputs != 1 { continue; }
 
-        // Both must be local (pipeline edges).
-        if !src_child.local || !tgt_child.local { continue; }
+        // The target must use pipeline (thread-local) channels on its input.
+        // The source's input pact doesn't matter: it receives data from outside the chain.
+        if !tgt_child.pipeline { continue; }
 
         // Both must not require notifications.
         if src_child.notify || tgt_child.notify { continue; }

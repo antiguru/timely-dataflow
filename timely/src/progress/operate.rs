@@ -61,6 +61,14 @@ pub trait Operate<T: Timestamp> {
     /// frontier information can indicate this with `false`, and they will not be scheduled on the
     /// basis of their input frontiers changing.
     fn notify_me(&self) -> bool { true }
+
+    /// Indicates whether all inputs use thread-local (pipeline) channels.
+    ///
+    /// Operators with pipeline inputs receive data through thread-local channels,
+    /// meaning data pushed by an upstream operator on the same worker is immediately
+    /// available. This property is used by chain fusion to determine whether
+    /// consecutive operators can be scheduled as a single unit.
+    fn pipeline(&self) -> bool { true }
 }
 
 /// Operator internal connectivity, from inputs to outputs.
