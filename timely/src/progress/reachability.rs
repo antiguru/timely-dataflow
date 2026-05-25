@@ -77,7 +77,7 @@
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 use std::cmp::Reverse;
 
-use columnar::{Vecs, Index as ColumnarIndex};
+use columnar::{Vecs, Results, Index as ColumnarIndex};
 
 use crate::progress::Timestamp;
 use crate::progress::{Source, Target};
@@ -92,6 +92,25 @@ use crate::progress::timestamp::PathSummary;
 /// The outer iterator yields nodes, each node yields ports, each port yields data items.
 fn build_nested_vecs<S>(nodes: impl Iterator<Item = impl Iterator<Item = impl Iterator<Item = S>>>) -> Vecs<Vecs<Vec<S>>> {
     let mut result: Vecs<Vecs<Vec<S>>> = Default::default();
+    for node in nodes {
+        for port in node {
+            result.values.push_iter(port);
+        }
+        result.bounds.push(result.values.bounds.len() as u64);
+    }
+    result
+}
+
+/// Build a `Vecs<Vecs<Results<Vec<usize>, Vec<(usize, TS)>>>>` from nested iterators
+/// of `Result<usize, (usize, TS)>` items. The inner `Results` container splits the
+/// `Ok` and `Err` arms into parallel columns at storage time.
+fn build_nested_results<TS>(
+    nodes: impl Iterator<Item = impl Iterator<Item = impl Iterator<Item = Result<usize, (usize, TS)>>>>,
+) -> Vecs<Vecs<Results<Vec<usize>, Vec<(usize, TS)>>>>
+where
+    TS: Clone,
+{
+    let mut result: Vecs<Vecs<Results<Vec<usize>, Vec<(usize, TS)>>>> = Default::default();
     for node in nodes {
         for port in node {
             result.values.push_iter(port);
@@ -386,18 +405,21 @@ impl<T: Timestamp> Default for Builder<T> {
 pub struct Tracker<T:Timestamp> {
 
     /// Internal operator connectivity, columnar form of `Vec<Vec<PortConnectivity<T::Summary>>>`.
-    /// Indexed by `(node, input_port)` to yield `(output_port, summary)` pairs.
-    nodes: Vecs<Vecs<Vec<(usize, T::Summary)>>>,
+    /// Indexed by `(node, input_port)` to yield port entries: `Ok(output_port)` for
+    /// the default (identity) summary, `Err((output_port, summary))` for any other.
+    /// The columnar `Results` container splits the two arms into separate storage
+    /// columns, so default ports cost only a single bit in the rank-select bitmap.
+    nodes: Vecs<Vecs<Results<Vec<usize>, Vec<(usize, T::Summary)>>>>,
     /// Edge connectivity, columnar form of `Vec<Vec<Vec<Target>>>`.
     /// Indexed by `(node, output_port)` to yield target slices.
     edges: Vecs<Vecs<Vec<Target>>>,
 
     /// Summaries from each target (operator input) to scope outputs.
-    /// Indexed by `(node, target_port)` to yield `(scope_output, summary)` pairs.
-    target_summaries: Vecs<Vecs<Vec<(usize, T::Summary)>>>,
+    /// Indexed by `(node, target_port)`. Encoded as `Result` per port; see [`nodes`].
+    target_summaries: Vecs<Vecs<Results<Vec<usize>, Vec<(usize, T::Summary)>>>>,
     /// Summaries from each source (operator output) to scope outputs.
-    /// Indexed by `(node, source_port)` to yield `(scope_output, summary)` pairs.
-    source_summaries: Vecs<Vecs<Vec<(usize, T::Summary)>>>,
+    /// Indexed by `(node, source_port)`. Encoded as `Result` per port; see [`nodes`].
+    source_summaries: Vecs<Vecs<Results<Vec<usize>, Vec<(usize, T::Summary)>>>>,
 
     /// Each source and target has a mutable antichain to ensure that we track their discrete frontiers,
     /// rather than their multiplicities. We separately track the frontiers resulting from propagated
@@ -574,9 +596,11 @@ impl<T:Timestamp> Tracker<T> {
             }
         }
 
-        // Build columnar nodes: Vecs<Vecs<Vec<(usize, T::Summary)>>>.
-        let nodes = build_nested_vecs(builder.nodes.iter().map(|connectivity| {
-            connectivity.iter().map(|port_conn| port_conn.iter_summaries_owned())
+        // Build columnar nodes: `Vecs<Vecs<Results<Vec<usize>, Vec<(usize, T::Summary)>>>>`.
+        // Default port summaries flow into `Results::oks` (just the port index); any
+        // non-default antichain element flows into `Results::errs` (port + summary).
+        let nodes = build_nested_results(builder.nodes.iter().map(|connectivity| {
+            connectivity.iter().map(|port_conn| port_conn.iter_summaries_results_owned())
         }));
 
         // Build columnar edges: Vecs<Vecs<Vec<Target>>>.
@@ -585,11 +609,11 @@ impl<T:Timestamp> Tracker<T> {
         }));
 
         // Build columnar target and source summaries.
-        let target_summaries = build_nested_vecs(target_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| port_conn.iter_summaries_owned())
+        let target_summaries = build_nested_results(target_sum.iter().map(|ports| {
+            ports.iter().map(|port_conn| port_conn.iter_summaries_results_owned())
         }));
-        let source_summaries = build_nested_vecs(source_sum.iter().map(|ports| {
-            ports.iter().map(|port_conn| port_conn.iter_summaries_owned())
+        let source_summaries = build_nested_results(source_sum.iter().map(|ports| {
+            ports.iter().map(|port_conn| port_conn.iter_summaries_results_owned())
         }));
 
         let scope_outputs = builder.shape[0].0;
@@ -655,9 +679,16 @@ impl<T:Timestamp> Tracker<T> {
 
             for (time, diff) in changes {
                 self.total_counts += diff;
-                for &(output, ref summary) in (&self.target_summaries).get(target.node).get(target.port).into_index_iter() {
-                    if let Some(out_time) = summary.results_in(&time) {
-                        self.output_changes[output].update(out_time, diff);
+                for entry in (&self.target_summaries).get(target.node).get(target.port).into_index_iter() {
+                    match entry {
+                        Ok(output) => {
+                            self.output_changes[*output].update(time.clone(), diff);
+                        }
+                        Err((output, summary)) => {
+                            if let Some(out_time) = summary.results_in(&time) {
+                                self.output_changes[*output].update(out_time, diff);
+                            }
+                        }
                     }
                 }
                 self.worklist.push(Reverse((time, Location::from(target), diff)));
@@ -676,9 +707,16 @@ impl<T:Timestamp> Tracker<T> {
             for (time, diff) in changes {
                 self.total_counts += diff;
                 operator.cap_counts += diff;
-                for &(output, ref summary) in (&self.source_summaries).get(source.node).get(source.port).into_index_iter() {
-                    if let Some(out_time) = summary.results_in(&time) {
-                        self.output_changes[output].update(out_time, diff);
+                for entry in (&self.source_summaries).get(source.node).get(source.port).into_index_iter() {
+                    match entry {
+                        Ok(output) => {
+                            self.output_changes[*output].update(time.clone(), diff);
+                        }
+                        Err((output, summary)) => {
+                            if let Some(out_time) = summary.results_in(&time) {
+                                self.output_changes[*output].update(out_time, diff);
+                            }
+                        }
                     }
                 }
                 self.worklist.push(Reverse((time, Location::from(source), diff)));
@@ -713,10 +751,18 @@ impl<T:Timestamp> Tracker<T> {
                             .update_iter(Some((time, diff)));
 
                         for (time, diff) in changes {
-                            for &(output_port, ref summary) in (&self.nodes).get(location.node).get(port_index).into_index_iter() {
-                                if let Some(new_time) = summary.results_in(&time) {
-                                    let source = Location { node: location.node, port: Port::Source(output_port) };
-                                    self.worklist.push(Reverse((new_time, source, diff)));
+                            for entry in (&self.nodes).get(location.node).get(port_index).into_index_iter() {
+                                match entry {
+                                    Ok(output_port) => {
+                                        let source = Location { node: location.node, port: Port::Source(*output_port) };
+                                        self.worklist.push(Reverse((time.clone(), source, diff)));
+                                    }
+                                    Err((output_port, summary)) => {
+                                        if let Some(new_time) = summary.results_in(&time) {
+                                            let source = Location { node: location.node, port: Port::Source(*output_port) };
+                                            self.worklist.push(Reverse((new_time, source, diff)));
+                                        }
+                                    }
                                 }
                             }
                             self.pushed_changes.update((location, time), diff);

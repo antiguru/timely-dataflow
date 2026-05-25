@@ -193,6 +193,30 @@ impl<TS> PortConnectivity<TS> {
             }))
     }
 
+    /// Iterates summary entries as `Result<usize, (usize, TS)>`, where `Ok(port)`
+    /// denotes a default summary at `port` and `Err((port, summary))` denotes a
+    /// non-default summary element. Antichains in `specifics` that contain the
+    /// default element alongside others split per element: the default occurrence
+    /// becomes `Ok(port)` while the remaining elements become `Err((port, _))`.
+    pub fn iter_summaries_results_owned(
+        &self,
+    ) -> impl Iterator<Item = Result<usize, (usize, TS)>> + '_
+    where
+        TS: Default + Clone + Eq,
+    {
+        let defaults = self.iter_defaults().map(Ok::<usize, (usize, TS)>);
+        let specifics = self.iter_specifics().flat_map(|(p, ac)| {
+            ac.elements().iter().map(move |s| {
+                if s == &TS::default() {
+                    Ok(p)
+                } else {
+                    Err((p, s.clone()))
+                }
+            })
+        });
+        defaults.chain(specifics)
+    }
+
     /// Invokes `pred` for each summary attached to `port`, returning `true` on the
     /// first hit. Materializes a `TS::default()` for the default-bit case.
     pub fn any_summary<F>(&self, port: usize, mut pred: F) -> bool
